@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+        <link rel="stylesheet" type="text/css" href="asset/bootstrap/css/bootstrap.css" />
+        <link rel="stylesheet" type="text/css" href="asset/jquery-gritter/css/jquery.gritter.css" />
+        <link rel="stylesheet" type="text/css" href="asset/fonts/font-awesome-4/css/font-awesome.min.css" />
+        <link rel="stylesheet" type="text/css" href="asset/bootstrap-switch/bootstrap-switch.css" />
+        <link rel="stylesheet" type="text/css" href="asset/bootstrap-datetimepicker/css/bootstrap-datetimepicker.min.css" />
+        <link rel="stylesheet" type="text/css" href="asset/css/style.css" />
+
+
+        <script type="text/javascript" src="asset/js/jquery.js"></script>
+        <script type="text/javascript" src="asset/bootstrap/js/bootstrap.min.js"></script>
+        <script type="text/javascript" src="asset/js/jPushMenu.js"></script>
+        <script type="text/javascript" src="asset/js/jquery.sparkline.min.js"></script>
+        <script type="text/javascript" src="asset/jquery-flot/jquery.flot.js"></script>
+        <script type="text/javascript" src="asset/jquery-easypiechart/jquery.easy-pie-chart.js"></script>
+        <script type="text/javascript" src="asset/jquery-nanoscroller/jquery.nanoscroller.js"></script>
+        <script type="text/javascript" src="asset/bootstrap-switch/bootstrap-switch.min.js"></script>
+        <script type="text/javascript" src="asset/jquery-icheck/icheck.min.js"></script>
+        <script type="text/javascript" src="asset/bootstrap-datetimepicker/js/bootstrap-datetimepicker.min.js"></script>
+        <script type="text/javascript" src="asset/js/moment.js"></script>
+        <script type="text/javascript" src="asset/js/flatdream-core.js"></script>
+        <script type="text/javascript" src="asset/js/portal.js"></script>
+
+        <script type="text/javascript">
+            $(document).ready(function() {
+                call_swswitch_api_params("system.user.login", {"recover-cookie": true}, function(data) {
+                    if (data.Response.Successful === true) {
+                        location.href = data.Response.TargetUrl;
+                    }
+                });
+                $("#cl-wrapper").css({opacity: 1, 'margin-left': 0});
+                $("[data-form-id='username']").focus();
+                $("#login-form").submit(function(event) {
+                    event.preventDefault();
+                    var form_data = get_form_data($(this));
+                    var form_object = $(this);
+                    call_swswitch_api_params("system.user.login", form_data, function(data) {
+                        if (data.UserError !== undefined) {
+                            attach_form_alert(form_object, "alert-danger", "<strong>Error!</strong> <span>" + data.UserError + "</span>");
+                            $("[data-form-id='username']").focus();
+                        } else {
+                            location.href = data.Response.TargetUrl;
+                        }
+                    });
+                });
+            });
+        </script>
+
+        <title>Talk | Login</title>
+    </head>
+    <body class="texture">
+
+        <div id="cl-wrapper" class="login-container">
+
+            <div class="middle-login">
+                <div class="block-flat">
+                    <div class="header">							
+                        <h3 style="color: #ededed;" class="text-center"><span class="fa fa-phone-square"></span> Talk</h3>
+                    </div>
+                    <div>
+                        <form style="margin-bottom: 0px !important;" class="form-horizontal" id="login-form">
+                            <div class="content">
+                                <div class="form-error-placeholder" style="display:none"></div>
+                                <h4 class="title">Telephony Proxy Login</h4>
+                                <div class="form-group">
+                                    <div class="col-sm-12">
+                                        <div class="input-group">
+                                            <span class="input-group-addon"><i class="fa fa-user"></i></span>
+                                            <input type="text" placeholder="Username" data-form-id="username" class="form-control">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <div class="col-sm-12">
+                                        <div class="input-group">
+                                            <span class="input-group-addon"><i class="fa fa-lock"></i></span>
+                                            <input type="password" placeholder="Password" data-form-id="password" class="form-control">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <div class="col-sm-2">
+                                        <div class="switch switch-small">
+                                            <input type="checkbox" data-form-id="remember-login" id="remember-login">    
+                                        </div>
+                                    </div>
+                                    <label for="remember-login" class="col-sm-10" style="margin-top: 3px;"><span  data-toggle="tooltip" data-placement="right" title="Effective for 30 days"><strong>Remember Login</strong></span></label>
+                                </div>
+                            </div>
+                            <div class="foot">
+                                <button class="btn btn-primary" data-dismiss="modal" type="submit">Log in</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div> 
+        </div>
+    </body>
+</html>
