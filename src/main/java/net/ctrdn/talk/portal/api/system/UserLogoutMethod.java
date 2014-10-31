@@ -8,6 +8,7 @@ import javax.servlet.http.HttpServletResponse;
 import net.ctrdn.talk.core.ProxyController;
 import net.ctrdn.talk.exception.ApiMethodException;
 import net.ctrdn.talk.portal.api.DefaultApiMethod;
+import net.ctrdn.talk.system.SystemUserSessionDao;
 
 public class UserLogoutMethod extends DefaultApiMethod {
 
@@ -17,7 +18,8 @@ public class UserLogoutMethod extends DefaultApiMethod {
 
     @Override
     public JsonObjectBuilder execute(ProxyController proxyController, HttpServletRequest request, HttpServletResponse response) throws ApiMethodException {
-        proxyController.getPortalSessionDao(request.getSession()).endSession();
+        SystemUserSessionDao sesionDao = proxyController.getPortalSessionDao(request.getSession());
+        sesionDao.endSession();
         Cookie cookie = new Cookie("UserObjectId", "");
         cookie.setPath("/");
         cookie.setMaxAge(0);
@@ -26,6 +28,7 @@ public class UserLogoutMethod extends DefaultApiMethod {
         JsonObjectBuilder responseJob = Json.createObjectBuilder();
         responseJob.add("Successful", true);
         responseJob.add("TargetUri", "/");
+        this.getLogger().info("{} User " + sesionDao.getUser().getUsername() + " logged out", this.getLogId(request));
         return responseJob;
     }
 }

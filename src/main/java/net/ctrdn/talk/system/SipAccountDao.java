@@ -23,12 +23,12 @@ public class SipAccountDao extends DatabaseObject {
         this.setStringField("Username", username);
     }
 
-    public String getCompiledDigestHash() {
-        return this.getStringField("CompiledDigestHash");
+    public String getPlaintextPassword() {
+        return this.getStringField("PlaintextPassword");
     }
 
-    public void setCompiledDigestHash(String compiledDigestHash) {
-        this.setStringField("CompiledDigestHash", compiledDigestHash);
+    public void setPlaintextPassword(String plaintextPassword) {
+        this.setStringField("PlaintextPassword", plaintextPassword);
     }
 
     public boolean getEnabled() {

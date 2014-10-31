@@ -2,9 +2,14 @@ package net.ctrdn.talk.portal.api;
 
 import java.util.Date;
 import javax.json.JsonObjectBuilder;
+import javax.servlet.http.HttpServletRequest;
+import net.ctrdn.talk.system.SystemUserSessionDao;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 abstract public class DefaultApiMethod implements ApiMethod {
 
+    private final Logger logger = LoggerFactory.getLogger(this.getClass());
     private final String path;
 
     protected DefaultApiMethod(String path) {
@@ -35,5 +40,17 @@ abstract public class DefaultApiMethod implements ApiMethod {
         } else {
             job.add(n, o.toString());
         }
+    }
+
+    protected Logger getLogger() {
+        return logger;
+    }
+
+    protected String getLogId(HttpServletRequest request) {
+        String idString = "[" + request.getRemoteAddr();
+        if (request.getSession().getAttribute("UserSession") != null) {
+            idString += "/" + ((SystemUserSessionDao) request.getSession().getAttribute("UserSession")).getUser().getUsername();
+        }
+        return idString + "]";
     }
 }

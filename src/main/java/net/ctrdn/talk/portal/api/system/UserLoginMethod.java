@@ -83,6 +83,11 @@ public class UserLoginMethod extends DefaultApiMethod {
                 } else {
                     responseJob.add("TargetUrl", "/");
                 }
+                if (inRecoverCookie) {
+                    this.getLogger().info("{} User " + userDao.getUsername() + " successfully logged in from cookie", this.getLogId(request));
+                } else {
+                    this.getLogger().info("{} User " + userDao.getUsername() + " successfully logged in", this.getLogId(request));
+                }
                 return responseJob;
             }
         } catch (NoSuchAlgorithmException | UnsupportedEncodingException ex) {
