@@ -4,5 +4,6 @@ public enum SipSessionState {
 
     STARTED,
     INVITED,
-    ESTABLISHED
+    ESTABLISHED,
+    ENDED
 }

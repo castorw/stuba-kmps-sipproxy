@@ -7,7 +7,6 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Properties;
 import java.util.TooManyListenersException;
 import javax.sip.ClientTransaction;
@@ -27,11 +26,11 @@ import javax.sip.TransportNotSupportedException;
 import javax.sip.address.Address;
 import javax.sip.address.AddressFactory;
 import javax.sip.address.SipURI;
+import javax.sip.header.CSeqHeader;
 import javax.sip.header.ContactHeader;
 import javax.sip.header.FromHeader;
 import javax.sip.header.HeaderFactory;
-import javax.sip.header.RecordRouteHeader;
-import javax.sip.header.RouteHeader;
+import javax.sip.header.ServerHeader;
 import javax.sip.header.ToHeader;
 import javax.sip.header.UserAgentHeader;
 import javax.sip.header.ViaHeader;
@@ -151,12 +150,14 @@ public class SipServer {
         }
     }
 
-    public void rewriteUserAgentHeader(Response response) throws TalkSipServerException {
+    public void attachUserAgentAndServerHeader(Response response) throws TalkSipServerException {
         try {
             List<String> userAgentList = new ArrayList<>();
             userAgentList.add(SipServer.USER_AGENT);
             UserAgentHeader contactHeader = this.getSipHeaderFactory().createUserAgentHeader(userAgentList);
             response.setHeader(contactHeader);
+            ServerHeader serverHeader = this.getSipHeaderFactory().createServerHeader(userAgentList);
+            response.setHeader(serverHeader);
             this.logger.debug("Rewrote User-Agent header on response {} {}", response.getStatusCode(), response.getReasonPhrase());
         } catch (ParseException ex) {
             throw new TalkSipServerException("Failed to rewrite User-Agent header", ex);
@@ -168,12 +169,34 @@ public class SipServer {
             SipExtensionDao extensionDao = this.resolvePrimaryExtensionDao(sipRegistration);
             if (extensionDao != null) {
                 SipURI sipUri = this.getSipAddressFactory().createSipURI(extensionDao.getExtension(), this.getSipDomain());
+                sipUri.setPort(this.getSipPort());
+                sipUri.setTransportParam(this.sipTransport);
                 Address address = this.getSipAddressFactory().createAddress(sipRegistration.getSipAccountDao().getSystemUserDao().getDisplayName(), sipUri);
                 ContactHeader contactHeader = this.getSipHeaderFactory().createContactHeader(address);
                 request.setHeader(contactHeader);
                 this.logger.debug("Rewrote Contact header on {} request", request.getMethod());
             } else {
                 this.logger.debug("Failed to rewrite Contact header on {} request, no primary extension found", request.getMethod());
+                throw new TalkSipHeaderRewriteException("No primary extension defined");
+            }
+        } catch (ParseException ex) {
+            throw new TalkSipServerException("Failed to rewrite Contact header", ex);
+        }
+    }
+
+    public void rewriteContactHeader(Response response, SipRegistration sipRegistration) throws TalkSipServerException {
+        try {
+            SipExtensionDao extensionDao = this.resolvePrimaryExtensionDao(sipRegistration);
+            if (extensionDao != null) {
+                SipURI sipUri = this.getSipAddressFactory().createSipURI(extensionDao.getExtension(), this.getSipDomain());
+                sipUri.setPort(this.getSipPort());
+                sipUri.setTransportParam(this.sipTransport);
+                Address address = this.getSipAddressFactory().createAddress(sipRegistration.getSipAccountDao().getSystemUserDao().getDisplayName(), sipUri);
+                ContactHeader contactHeader = this.getSipHeaderFactory().createContactHeader(address);
+                response.setHeader(contactHeader);
+                this.logger.debug("Rewrote Contact header on response {} {}", response.getStatusCode(), response.getReasonPhrase());
+            } else {
+                this.logger.debug("Failed to rewrite Contact header on response {} {}, no primary extension found", response.getStatusCode(), response.getReasonPhrase());
                 throw new TalkSipHeaderRewriteException("No primary extension defined");
             }
         } catch (ParseException ex) {
@@ -200,22 +223,32 @@ public class SipServer {
         }
     }
 
-    public void removeTopmostViaHeader(Response response) throws ParseException {
-        ListIterator viaListIterator = response.getHeaders(ViaHeader.NAME);
-        response.removeHeader(ViaHeader.NAME);
-        ViaHeader lastViaHeader = null;
-        int count = 0;
-        while (viaListIterator.hasNext()) {
-            ViaHeader header = (ViaHeader) viaListIterator.next();
-            if (count > 0) {
-                response.addHeader(header);
-                lastViaHeader = header;
-            }
-            count++;
+    public void attachProxyViaHeader(Request request) throws ParseException, TalkSipServerException {
+        try {
+            request.removeHeader(ViaHeader.NAME);
+            ViaHeader viaHeader = this.getSipHeaderFactory().createViaHeader(this.getSipDomain(), this.getSipPort(), this.getSipTransport(), "z9hG4bK-talkd-" + Long.toString(this.startDate.getTime()));
+            request.addFirst(viaHeader);
+        } catch (InvalidArgumentException | ParseException | SipException ex) {
+            throw new TalkSipServerException("Failed to fix-up Via header on request", ex);
         }
-        if (lastViaHeader != null) {
-            lastViaHeader.removeParameter("received");
-            lastViaHeader.removeParameter("rport");
+    }
+
+    public void attachProxyViaHeader(Response response) throws ParseException, TalkSipServerException {
+        try {
+            response.removeHeader(ViaHeader.NAME);
+            ViaHeader viaHeader = this.getSipHeaderFactory().createViaHeader(this.getSipDomain(), this.getSipPort(), this.getSipTransport(), "z9hG4bK-talkd-" + Long.toString(this.startDate.getTime()));
+            response.addFirst(viaHeader);
+        } catch (InvalidArgumentException | ParseException | SipException ex) {
+            throw new TalkSipServerException("Failed to fix-up Via header on response", ex);
+        }
+    }
+
+    public void attachTargetViaHeader(Response response, Request sourceRequest) throws TalkSipServerException {
+        try {
+            response.removeHeader(ViaHeader.NAME);
+            response.addFirst((ViaHeader) sourceRequest.getHeader(ViaHeader.NAME));
+        } catch (SipException ex) {
+            throw new TalkSipServerException("Failed to fix-up Via header on response", ex);
         }
     }
 
@@ -223,23 +256,14 @@ public class SipServer {
         return requestEvent.getServerTransaction() == null ? this.getSipProvider().getNewServerTransaction(requestEvent.getRequest()) : requestEvent.getServerTransaction();
     }
 
-    public void fuckitup(SipRegistration targetRegistration, Request newRequest) throws ParseException, SipException, InvalidArgumentException {
-        SipURI targetUri = this.getSipAddressFactory().createSipURI(targetRegistration.getSipAccountDao().getUsername(), targetRegistration.getRemoteHost());
-        targetUri.setPort(targetRegistration.getRemotePort());
-        targetUri.setLrParam();
-        Address targetAddress = this.getSipAddressFactory().createAddress(targetRegistration.getSipAccountDao().getSystemUserDao().getDisplayName(), targetUri);
-        RouteHeader targetRouteHeader = this.getSipHeaderFactory().createRouteHeader(targetAddress);
-        newRequest.addFirst(targetRouteHeader);
-
-        ViaHeader viaHeader = this.getSipHeaderFactory().createViaHeader(this.getSipDomain(), this.getSipPort(), this.getSipTransport(), "z9hG4bK-talkd-" + Long.toString(this.startDate.getTime()));
-        newRequest.addFirst(viaHeader);
-
-        SipURI proxyUri = this.getSipAddressFactory().createSipURI("proxy", this.getSipDomain());
-        Address proxyAddress = this.getSipAddressFactory().createAddress("proxy", proxyUri);
-        proxyUri.setPort(this.getSipPort());
-        proxyUri.setLrParam();
-        RecordRouteHeader recordRouteHeader = this.getSipHeaderFactory().createRecordRouteHeader(proxyAddress);
-        newRequest.addHeader(recordRouteHeader);
+    public void forwardAck(Response response, ClientTransaction transaction) throws TalkSipServerException {
+        try {
+            Request ackRequest = transaction.getDialog().createAck(((CSeqHeader) response.getHeader(CSeqHeader.NAME)).getSeqNumber());
+            this.logger.trace("Forwarding ACK request\n{}", ackRequest.toString());
+            transaction.getDialog().sendAck(ackRequest);
+        } catch (InvalidArgumentException | SipException ex) {
+            throw new TalkSipServerException("Failed to forward ACK", ex);
+        }
     }
 
     public void forwardRequest(SipRegistration sourceRegistration, SipRegistration targetRegistration, Request request) throws TalkSipServerException {
@@ -247,25 +271,25 @@ public class SipServer {
             if (sourceRegistration == null || targetRegistration == null) {
                 throw new TalkSipServerException("Cannot forward request with no source and target provided");
             }
-            // ViaHeader sourceViaHeader = (ViaHeader) requestEvent.getRequest().getHeader(ViaHeader.NAME);
-            //ToHeader destinationToHeader = (ToHeader) requestEvent.getRequest().getHeader(ToHeader.NAME);
 
-            Request newRequest = request;
+            this.attachProxyViaHeader(request);
 
-            this.fuckitup(targetRegistration, newRequest);
+            SipUri requestUri = (SipUri) request.getRequestURI();
+            requestUri.setHost(targetRegistration.getRemoteHost());
+            requestUri.setPort(targetRegistration.getRemotePort());
 
-            ToHeader toHeader = (ToHeader) newRequest.getHeader(ToHeader.NAME);
+            ToHeader toHeader = (ToHeader) request.getHeader(ToHeader.NAME);
             SipUri toHeaderSipUri = (SipUri) toHeader.getAddress().getURI();
             toHeaderSipUri.setUser(targetRegistration.getSipAccountDao().getUsername());
             toHeaderSipUri.setPort(this.getSipPort());
             toHeader.getAddress().setDisplayName(targetRegistration.getSipAccountDao().getUsername());
 
-            this.logger.trace("Statefully forwarding SIP request from {}@{} to {}@{}\n{}", sourceRegistration.getSipAccountDao().getUsername(), this.getSipDomain(), targetRegistration.getSipAccountDao().getUsername(), this.getSipDomain(), newRequest.toString());
+            this.logger.trace("Statefully forwarding SIP request from {}@{} to {}@{}\n{}", sourceRegistration.getSipAccountDao().getUsername(), this.getSipDomain(), targetRegistration.getSipAccountDao().getUsername(), this.getSipDomain(), request.toString());
 
-            ClientTransaction ct = this.sipProvider.getNewClientTransaction(newRequest);
+            ClientTransaction ct = this.sipProvider.getNewClientTransaction(request);
             ct.getDialog();
             ct.sendRequest();
-        } catch (ParseException | SipException | InvalidArgumentException ex) {
+        } catch (ParseException | SipException ex) {
             throw new TalkSipServerException("Failed to prepare request forward", ex);
         }
     }

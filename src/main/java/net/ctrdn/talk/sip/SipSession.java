@@ -1,9 +1,7 @@
 package net.ctrdn.talk.sip;
 
+import gov.nist.javax.sip.address.SipUri;
 import java.text.ParseException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.ListIterator;
 import javax.sip.ClientTransaction;
 import javax.sip.InvalidArgumentException;
 import javax.sip.RequestEvent;
@@ -29,11 +27,14 @@ public class SipSession {
     private final SipServer sipServer;
     private CallIdHeader callIdHeader;
     private Request lastInviteRequest;
-    private ServerTransaction lastInviteServerTransaction = null;
+    private ServerTransaction lastInviteRequestServerTransaction = null;
+    private Request lastCancelRequest;
+    private ServerTransaction lastCancelRequestServerTransaction = null;
     private Response lastOkResponse;
     private ClientTransaction lastOkClientTransaction;
-    private final List<ResponseEvent> callerResponseList = new ArrayList<>();
-    private final List<ResponseEvent> calleeResponseList = new ArrayList<>();
+    private Response lastRingingResponse;
+    private ClientTransaction lastRingingResponseClientTransaction;
+    ;
 
     private SipSessionState state = SipSessionState.STARTED;
 
@@ -52,7 +53,7 @@ public class SipSession {
             switch (this.state) {
                 case STARTED: {
                     this.lastInviteRequest = requestEvent.getRequest();
-                    this.lastInviteServerTransaction = this.sipServer.getServerTransaction(requestEvent);
+                    this.lastInviteRequestServerTransaction = this.sipServer.getServerTransaction(requestEvent);
                     this.callIdHeader = (CallIdHeader) requestEvent.getRequest().getHeader(CallIdHeader.NAME);
                     Request newRequest = (Request) requestEvent.getRequest().clone();
                     try {
@@ -70,49 +71,104 @@ public class SipSession {
                 case INVITED: {
                     switch (requestEvent.getRequest().getMethod()) {
                         case Request.CANCEL:
+                            this.lastCancelRequest = requestEvent.getRequest();
+                            this.lastCancelRequestServerTransaction = this.sipServer.getServerTransaction(requestEvent);
                             this.sendOkToCaller(requestEvent);
-                            this.sipServer.getSipProvider().getNewClientTransaction(this.calleeResponseList.get(0).getClientTransaction().createCancel()).sendRequest();
-                            break;
-                        case Request.ACK:
-                            Request ackRequest = this.lastOkClientTransaction.getDialog().createAck(((CSeqHeader) this.lastOkResponse.getHeader(CSeqHeader.NAME)).getSeqNumber());
-                            this.sipServer.fuckitup(this.callerRegistration, ackRequest);
-                            this.lastOkClientTransaction.getDialog().sendAck(ackRequest);
+                            Request cancelRequest = this.lastRingingResponseClientTransaction.createCancel();
+                            this.sipServer.attachProxyViaHeader(cancelRequest);
+                            ClientTransaction ct = this.sipServer.getSipProvider().getNewClientTransaction(cancelRequest);
+                            ct.sendRequest();
                             break;
                     }
                     break;
                 }
                 case ESTABLISHED: {
+                    switch (requestEvent.getRequest().getMethod()) {
+                        case Request.ACK: {
+                            this.sipServer.forwardAck(this.lastOkResponse, this.lastOkClientTransaction);
+                            break;
+                        }
+                        case Request.BYE: {
+                            ViaHeader viaHeader = (ViaHeader) requestEvent.getRequest().getHeader(ViaHeader.NAME);
+                            boolean byeByCaller = false;
+                            if ((viaHeader.getHost().equals(this.callerRegistration.getRemoteHost()) && viaHeader.getPort() == this.callerRegistration.getRemotePort())
+                                    || (viaHeader.getReceived().equals(this.callerRegistration.getRemoteHost()) && viaHeader.getPort() == this.callerRegistration.getRemotePort())) {
+                                byeByCaller = true;
+                            }
+                            Request newRequest = (Request) requestEvent.getRequest().clone();
+                            try {
+                                this.sipServer.rewriteFromHeader(newRequest, this.callerRegistration);
+                                this.sipServer.rewriteContactHeader(newRequest, this.callerRegistration);
+                                this.sipServer.rewriteUserAgentHeader(newRequest);
+                                this.sipServer.attachProxyViaHeader(newRequest);
+                            } catch (TalkSipHeaderRewriteException ex) {
+                            }
+                            if (byeByCaller) {
+                                this.sendOkToCaller(requestEvent);
+                                SipUri requestUri = (SipUri) newRequest.getRequestURI();
+                                requestUri.setHost(this.calleeRegistration.getRemoteHost());
+                                requestUri.setPort(this.calleeRegistration.getRemotePort());
+                                ClientTransaction ct = this.sipServer.getSipProvider().getNewClientTransaction(newRequest);
+                                this.lastOkClientTransaction.getDialog().sendRequest(ct);
+                            } else {
+                                this.sendOkToCallee(requestEvent);
+                                SipUri requestUri = (SipUri) newRequest.getRequestURI();
+                                requestUri.setHost(this.callerRegistration.getRemoteHost());
+                                requestUri.setPort(this.callerRegistration.getRemotePort());
+                                ClientTransaction ct = this.sipServer.getSipProvider().getNewClientTransaction(newRequest);
+                                ct.sendRequest();
+                            }
+                            this.state = SipSessionState.ENDED;
+                            break;
+                        }
+                    }
                     break;
                 }
             }
-        } catch (TalkSipServerException | ParseException | SipException | InvalidArgumentException ex) {
+        } catch (TalkSipServerException | ParseException | SipException ex) {
             throw new TalkSipSessionException("Problem processing session request within session", ex);
         }
     }
 
     public void sessionResponseReceived(ResponseEvent responseEvent) throws TalkSipServerException {
         try {
-            if (responseEvent.getClientTransaction().getRequest().getMethod().equals(Request.INVITE)) {
-                this.calleeResponseList.add(responseEvent);
-                if (responseEvent.getResponse().getStatusCode() == 180) {
-                    this.logger.debug("Forwarding RINGING response to caller");
-                    this.sipServer.sendResponse(this.lastInviteServerTransaction, this.sipServer.getSipMessageFactory().createResponse(Response.RINGING, this.lastInviteRequest));
-                } else if (responseEvent.getResponse().getStatusCode() == 200) {
-                    this.logger.debug("Session established successfully, forwarding OK to caller");
-                    Response newResponse = (Response) responseEvent.getResponse().clone();
-                    this.sipServer.removeTopmostViaHeader(newResponse);
-                    this.sipServer.rewriteUserAgentHeader(newResponse);
-                    this.sipServer.sendResponse(this.lastInviteServerTransaction, newResponse);
-                    this.lastOkResponse = responseEvent.getResponse();
-                    this.lastOkClientTransaction = responseEvent.getClientTransaction();
-                } else if (responseEvent.getResponse().getStatusCode() >= 300) {
-                    Response newResponse = (Response) responseEvent.getResponse().clone();
-                    this.sipServer.removeTopmostViaHeader(newResponse);
-                    this.sipServer.rewriteUserAgentHeader(newResponse);
-                    this.sipServer.sendResponse(this.lastInviteServerTransaction, newResponse);
+            switch (this.state) {
+                case STARTED: {
+                    break;
                 }
-                if (responseEvent.getResponse().getStatusCode() >= 400) {
-                    this.tearDown();
+                case INVITED: {
+                    Response newResponse = (Response) responseEvent.getResponse().clone();
+                    try {
+                        this.sipServer.rewriteContactHeader(newResponse, this.callerRegistration);
+                        this.sipServer.attachTargetViaHeader(newResponse, this.lastInviteRequest);
+                        this.sipServer.attachUserAgentAndServerHeader(newResponse);
+                    } catch (TalkSipHeaderRewriteException ex) {
+
+                    }
+                    if (responseEvent.getClientTransaction().getRequest().getMethod().equals(Request.INVITE)) {
+                        if (responseEvent.getResponse().getStatusCode() == 180) {
+                            this.logger.debug("Forwarding RINGING response to caller");
+                            this.sipServer.sendResponse(this.lastInviteRequestServerTransaction, this.sipServer.getSipMessageFactory().createResponse(Response.RINGING, this.lastInviteRequest));
+                            this.lastRingingResponse = responseEvent.getResponse();
+                            this.lastRingingResponseClientTransaction = responseEvent.getClientTransaction();
+                        } else if (responseEvent.getResponse().getStatusCode() == 200) {
+                            this.logger.debug("Session answered by callee, forwarding OK to caller");
+                            this.sipServer.sendResponse(this.lastInviteRequestServerTransaction, newResponse);
+                            this.lastOkResponse = responseEvent.getResponse();
+                            this.lastOkClientTransaction = responseEvent.getClientTransaction();
+                            this.state = SipSessionState.ESTABLISHED;
+                        } else if (responseEvent.getResponse().getStatusCode() >= 400) {
+                            this.logger.info("Session has been terminated with message " + responseEvent.getResponse().getStatusCode() + " " + responseEvent.getResponse().getReasonPhrase());
+                            this.sipServer.sendResponse(this.lastInviteRequestServerTransaction, newResponse);
+                        }
+                    }
+                    if (responseEvent.getResponse().getStatusCode() >= 400) {
+                        this.tearDown();
+                    }
+                    break;
+                }
+                case ESTABLISHED: {
+
                 }
             }
         } catch (ParseException ex) {
@@ -129,10 +185,19 @@ public class SipSession {
         }
     }
 
+    private void sendOkToCallee(RequestEvent requestEvent) throws ParseException, TalkSipServerException {
+        try {
+            Response response = this.calleeRegistration.getSipServer().getSipMessageFactory().createResponse(Response.OK, requestEvent.getRequest());
+            this.sipServer.sendResponse(requestEvent, response);
+        } catch (ParseException ex) {
+            throw new TalkSipServerException("Error responding", ex);
+        }
+    }
+
     private void sendTryingToCaller(RequestEvent requestEvent) throws ParseException, TalkSipServerException {
         try {
             Response response = this.callerRegistration.getSipServer().getSipMessageFactory().createResponse(Response.TRYING, requestEvent.getRequest());
-            this.sipServer.sendResponse(this.lastInviteServerTransaction, response);
+            this.sipServer.sendResponse(this.lastInviteRequestServerTransaction, response);
         } catch (ParseException ex) {
             throw new TalkSipServerException("Error responding", ex);
         }

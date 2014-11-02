@@ -49,6 +49,7 @@ public class SipProviderListener implements SipListener {
                     this.processRegister(requestEvent);
                     break;
                 }
+                case "BYE":
                 case "ACK":
                 case "CANCEL":
                 case "INVITE": {
