@@ -1,12 +1,5 @@
 package net.ctrdn.talk.sip;
 
-import gov.nist.javax.sip.header.SIPHeader;
-import gov.nist.javax.sip.header.Via;
-import gov.nist.javax.sip.header.ViaList;
-import gov.nist.javax.sip.parser.ParserFactory;
-import java.text.ParseException;
-import java.util.ArrayList;
-import java.util.List;
 import javax.sip.DialogTerminatedEvent;
 import javax.sip.IOExceptionEvent;
 import javax.sip.RequestEvent;
@@ -16,14 +9,15 @@ import javax.sip.SipProvider;
 import javax.sip.TimeoutEvent;
 import javax.sip.TransactionTerminatedEvent;
 import javax.sip.address.AddressFactory;
-import javax.sip.header.Header;
+import javax.sip.header.CallIdHeader;
 import javax.sip.header.HeaderFactory;
 import javax.sip.header.ViaHeader;
 import javax.sip.message.MessageFactory;
+import javax.sip.message.Request;
 import net.ctrdn.talk.core.ProxyController;
 import net.ctrdn.talk.exception.TalkSipException;
 import net.ctrdn.talk.exception.TalkSipServerException;
-import net.ctrdn.talk.exception.TalkSipSessionException;
+import net.ctrdn.talk.exception.TalkSipRegistrationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,6 +49,16 @@ public class SipProviderListener implements SipListener {
                     this.processRegister(requestEvent);
                     break;
                 }
+                case "ACK":
+                case "CANCEL":
+                case "INVITE": {
+                    this.processSessionRequest(requestEvent);
+                    break;
+                }
+                default: {
+                    this.sipServer.sendNotImplemented(requestEvent);
+                    break;
+                }
             }
         } catch (TalkSipException ex) {
             this.logger.warn("Error processing SIP request", ex);
@@ -63,6 +67,18 @@ public class SipProviderListener implements SipListener {
 
     @Override
     public void processResponse(ResponseEvent responseEvent) {
+        try {
+            this.logger.trace("Received SIP response\n" + responseEvent.getResponse().toString());
+            CallIdHeader callIdHeader = (CallIdHeader) responseEvent.getResponse().getHeader(CallIdHeader.NAME);
+            for (SipSession session : this.sipServer.getSipSessionList()) {
+                if (session.getCallIdHeader().getCallId().equals(callIdHeader.getCallId())) {
+                    session.sessionResponseReceived(responseEvent);
+                    break;
+                }
+            }
+        } catch (TalkSipServerException ex) {
+            this.logger.warn("Error processing SIP response", ex);
+        }
     }
 
     @Override
@@ -81,26 +97,53 @@ public class SipProviderListener implements SipListener {
     public void processDialogTerminated(DialogTerminatedEvent dialogTerminatedEvent) {
     }
 
-    private void processRegister(RequestEvent requestEvent) throws TalkSipSessionException {
+    private SipRegistration lookupRegistration(Request request) throws TalkSipRegistrationException {
+        return this.lookupRegistration(request, true);
+    }
+
+    private SipRegistration lookupRegistration(Request request, boolean createNew) throws TalkSipRegistrationException {
+        SipRegistration registration;
+        ViaHeader viaHeader = (ViaHeader) request.getHeader("Via");
+        registration = this.sipServer.getSipRegistration(viaHeader.getHost(), (viaHeader.getPort() == -1) ? 5060 : viaHeader.getPort());
+        if (registration == null && createNew) {
+            this.logger.debug("Creating new SIP registration for {}:{}", viaHeader.getHost(), (viaHeader.getPort() == -1) ? 5060 : viaHeader.getPort());
+            registration = new SipRegistration(sipServer, viaHeader.getHost(), (viaHeader.getPort() == -1) ? 5060 : viaHeader.getPort());
+            this.sipServer.addSipRegistration(registration);
+        }
+        return registration;
+    }
+
+    private void processRegister(RequestEvent requestEvent) throws TalkSipRegistrationException {
         SipRegistration registration = null;
         try {
-            ViaHeader viaHeader = (ViaHeader) requestEvent.getRequest().getHeader("Via");
-            this.logger.trace("Received SIP REGISTER from " + viaHeader.getHost() + ":" + viaHeader.getPort());
-            registration = this.sipServer.getSipRegistration(viaHeader.getHost(), viaHeader.getPort());
-            if (registration == null) {
-                this.logger.debug("Creating new SIP registration for {}:{}", viaHeader.getHost(), viaHeader.getPort());
-                registration = new SipRegistration(sipServer, viaHeader.getHost(), viaHeader.getPort());
-                this.sipServer.addSipRegistration(registration);
-            }
-            registration.registerReceived(requestEvent.getRequest());
-
+            registration = this.lookupRegistration(requestEvent.getRequest());
+            registration.registerReceived(requestEvent);
         } catch (TalkSipServerException ex) {
             this.logger.warn("Failed to parse incoming header", ex);
-        } catch (TalkSipSessionException ex) {
+        } catch (TalkSipRegistrationException ex) {
             if (registration != null) {
                 this.sipServer.removeSipRegistration(registration);
             }
             this.logger.warn("Error processing REGISTER: " + ex.getMessage());
+        }
+    }
+
+    private void processSessionRequest(RequestEvent requestEvent) {
+        SipRegistration registration = null;
+        try {
+            registration = this.lookupRegistration(requestEvent.getRequest(), false);
+            if (registration != null) {
+                registration.sessionRequestReceived(requestEvent);
+            } else {
+                throw new TalkSipRegistrationException("Failed to lookup originating registration");
+            }
+        } catch (TalkSipRegistrationException ex) {
+            if (registration != null) {
+                this.sipServer.removeSipRegistration(registration);
+            }
+            this.logger.warn("Error processing session request: " + ex.getMessage());
+        } catch (TalkSipServerException ex) {
+            this.logger.warn("Failed to parse incoming header", ex);
         }
     }
 }

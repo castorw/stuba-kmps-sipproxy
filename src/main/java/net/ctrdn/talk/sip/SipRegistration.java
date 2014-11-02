@@ -3,20 +3,30 @@ package net.ctrdn.talk.sip;
 import com.mongodb.BasicDBObject;
 import gov.nist.javax.sip.address.SipUri;
 import gov.nist.javax.sip.clientauthutils.DigestServerAuthenticationHelper;
-import gov.nist.javax.sip.header.Expires;
 import java.io.UnsupportedEncodingException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.text.ParseException;
+import java.util.ArrayList;
+import java.util.List;
 import javax.sip.InvalidArgumentException;
+import javax.sip.RequestEvent;
+import javax.sip.ServerTransaction;
+import javax.sip.SipException;
+import javax.sip.TransactionAlreadyExistsException;
+import javax.sip.TransactionUnavailableException;
+import javax.sip.address.Address;
 import javax.sip.header.ContactHeader;
 import javax.sip.header.ProxyAuthorizationHeader;
+import javax.sip.header.ToHeader;
 import javax.sip.message.Request;
 import javax.sip.message.Response;
 import net.ctrdn.talk.core.common.DatabaseObjectFactory;
 import net.ctrdn.talk.exception.TalkSipServerException;
+import net.ctrdn.talk.exception.TalkSipRegistrationException;
 import net.ctrdn.talk.exception.TalkSipSessionException;
 import net.ctrdn.talk.system.SipAccountDao;
+import net.ctrdn.talk.system.SipExtensionDao;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,71 +37,89 @@ public class SipRegistration {
     private final SipServer sipServer;
 
     // state description
+    private final List<ContactHeader> registeredContactHeaderList = new ArrayList<>();
     private String remoteHost;
     private int remotePort;
-    private SipRegistrationState state = SipRegistrationState.STARTED;
+    private SipRegistrationAuthenticationState state = SipRegistrationAuthenticationState.STARTED;
+    private SipRegistrationCallState callState = SipRegistrationCallState.IDLE;
     private SipAccountDao sipAccountDao = null;
 
     // helpers
     private final DigestServerAuthenticationHelper authenticationHelper;
 
-    public SipRegistration(SipServer sipServer, String remoteHost, int remotePort) throws TalkSipSessionException {
+    public SipRegistration(SipServer sipServer, String remoteHost, int remotePort) throws TalkSipRegistrationException {
         try {
             this.sipServer = sipServer;
             this.remoteHost = remoteHost;
             this.remotePort = remotePort;
             this.authenticationHelper = new DigestServerAuthenticationHelper();
         } catch (NoSuchAlgorithmException ex) {
-            throw new TalkSipSessionException("Failed to create SIP session", ex);
+            throw new TalkSipRegistrationException("Failed to create SIP session", ex);
         }
     }
 
-    public void registerReceived(Request request) throws TalkSipSessionException, TalkSipServerException {
+    public void registerReceived(RequestEvent requestEvent) throws TalkSipRegistrationException, TalkSipServerException {
         try {
-            if (request.getExpires() != null && request.getExpires().getExpires() == 0) {
-                this.unregister(request);
+            if (requestEvent.getRequest().getExpires() != null && requestEvent.getRequest().getExpires().getExpires() == 0) {
+                this.unregister(requestEvent);
             } else {
-                ContactHeader contactHeader = (ContactHeader) request.getHeader(ContactHeader.NAME);
+                ContactHeader contactHeader = (ContactHeader) requestEvent.getRequest().getHeader(ContactHeader.NAME);
                 if (contactHeader.getExpires() == 0) {
-                    this.unregister(request);
+                    this.unregister(requestEvent);
                 }
             }
-            switch (this.state) {
+            switch (this.getState()) {
                 case STARTED: {
-                    Response challengeResponse = this.sipServer.getSipMessageFactory().createResponse(Response.PROXY_AUTHENTICATION_REQUIRED, request);
-                    this.authenticationHelper.generateChallenge(this.sipServer.getSipHeaderFactory(), challengeResponse, this.sipServer.getSipDomain());
-                    this.sipServer.sendResponse(challengeResponse);
+                    Response challengeResponse = this.getSipServer().getSipMessageFactory().createResponse(Response.PROXY_AUTHENTICATION_REQUIRED, requestEvent.getRequest());
+                    this.authenticationHelper.generateChallenge(this.getSipServer().getSipHeaderFactory(), challengeResponse, this.getSipServer().getSipDomain());
+                    this.sipServer.sendResponse(requestEvent, challengeResponse);
                     this.logger.debug("Challenging remote " + this.getRemoteHost() + ":" + this.getRemotePort());
-                    this.state = SipRegistrationState.CHALLENGED;
+                    this.state = SipRegistrationAuthenticationState.CHALLENGED;
                     break;
                 }
                 case CHALLENGED: {
-                    ProxyAuthorizationHeader proxyAuthHeader = (ProxyAuthorizationHeader) request.getHeader(ProxyAuthorizationHeader.NAME);
+                    ProxyAuthorizationHeader proxyAuthHeader = (ProxyAuthorizationHeader) requestEvent.getRequest().getHeader(ProxyAuthorizationHeader.NAME);
                     String lookupUsername = proxyAuthHeader.getUsername();
                     String lookupRealm = proxyAuthHeader.getRealm();
                     if (!lookupRealm.equals(this.sipServer.getSipDomain())) {
-                        this.sendResponseUnauthorized(request);
-                        throw new TalkSipSessionException("Attempting to authenticate with unknown realm " + lookupRealm);
+                        this.sendResponseUnauthorized(requestEvent);
+                        throw new TalkSipRegistrationException("Attempting to authenticate with unknown realm " + lookupRealm);
                     }
                     SipAccountDao lookupAccountDao = DatabaseObjectFactory.getInstance().find(SipAccountDao.class, new BasicDBObject("Username", lookupUsername));
                     if (lookupAccountDao == null) {
-                        this.sendResponseUnauthorized(request);
-                        throw new TalkSipSessionException("User not found in database: " + lookupUsername);
+                        this.sendResponseUnauthorized(requestEvent);
+                        throw new TalkSipRegistrationException("User not found in database: " + lookupUsername);
                     }
-                    boolean authStatus = this.authenticationHelper.doAuthenticateHashedPassword(request, this.generateDigestResponseMd5(lookupUsername, lookupRealm, lookupAccountDao.getPlaintextPassword()));
+                    boolean authStatus = this.authenticationHelper.doAuthenticateHashedPassword(requestEvent.getRequest(), this.generateDigestResponseMd5(lookupUsername, lookupRealm, lookupAccountDao.getPlaintextPassword()));
                     if (!authStatus) {
-                        this.sendResponseUnauthorized(request);
-                        throw new TalkSipSessionException("Invalid password for user " + lookupUsername);
+                        this.sendResponseUnauthorized(requestEvent);
+                        throw new TalkSipRegistrationException("Invalid password for user " + lookupUsername);
                     }
                     this.sipAccountDao = lookupAccountDao;
-                    this.state = SipRegistrationState.AUTHENTICATED;
-                    this.sendResponseOk(request, true);
+                    this.state = SipRegistrationAuthenticationState.AUTHENTICATED;
+
+                    this.registeredContactHeaderList.clear();
+                    BasicDBObject extensionSearchCriteria = new BasicDBObject("TargetType", "SipAccount");
+                    extensionSearchCriteria.put("SipAccountObjectId", this.getSipAccountDao().getObjectId());
+                    extensionSearchCriteria.put("Enabled", true);
+
+                    ContactHeader defaultContactHeader = this.sipServer.getSipHeaderFactory().createContactHeader(this.sipServer.getSipAddressFactory().createAddress(this.sipAccountDao.getSystemUserDao().getDisplayName(), this.sipServer.getSipAddressFactory().createSipURI(this.sipAccountDao.getUsername(), this.sipServer.getSipDomain())));
+                    this.registeredContactHeaderList.add(defaultContactHeader);
+                    for (SipExtensionDao sed : DatabaseObjectFactory.getInstance().list(SipExtensionDao.class, extensionSearchCriteria)) {
+                        SipUri proxyUri = new SipUri();
+                        proxyUri.setHost(this.getSipServer().getSipDomain());
+                        proxyUri.setUser(sed.getExtension());
+                        ContactHeader contactHeader = this.getSipServer().getSipHeaderFactory().createContactHeader(this.getSipServer().getSipAddressFactory().createAddress(this.getSipAccountDao().getSystemUserDao().getDisplayName(), proxyUri));
+                        this.registeredContactHeaderList.add(contactHeader);
+                    }
+
+                    this.sendResponseOk(requestEvent, true);
                     this.logger.info("Remote " + this.getRemoteHost() + ":" + this.getRemotePort() + " has successfully authenticated as " + lookupUsername + "@" + lookupRealm);
                     break;
                 }
                 case AUTHENTICATED: {
-                    this.sendResponseOk(request, true);
-                    this.logger.info("Updated contact list for  " + this.sipAccountDao.getUsername() + "@" + this.sipServer.getSipDomain() + " at " + this.getRemoteHost() + ":" + this.getRemotePort());
+                    this.sendResponseOk(requestEvent, true);
+                    this.logger.debug("Updated contact list for  " + this.getSipAccountDao().getUsername() + "@" + this.getSipServer().getSipDomain() + " at " + this.getRemoteHost() + ":" + this.getRemotePort());
                     break;
                 }
             }
@@ -100,29 +128,86 @@ public class SipRegistration {
         }
     }
 
-    private void unregister(Request request) throws ParseException, TalkSipServerException {
-        Response okResponse = this.sipServer.getSipMessageFactory().createResponse(Response.OK, request);
-        this.sipServer.sendResponse(okResponse);
-        this.sipServer.removeSipRegistration(this);
-        this.logger.info("User " + this.sipAccountDao.getUsername() + "@" + this.sipServer.getSipDomain() + " unregistered from " + this.getRemoteHost() + ":" + this.getRemotePort());
-        this.state = SipRegistrationState.UNREGISTERED;
-    }
-
-    private void sendResponseOk(Request request, boolean updateContactList) throws ParseException, TalkSipServerException {
-        SipUri proxyUri = new SipUri();
-        proxyUri.setHost(this.sipServer.getSipDomain());
-        proxyUri.setUser(this.sipAccountDao.getUsername());
-        Response okResponse = this.sipServer.getSipMessageFactory().createResponse(Response.OK, request);
-        if (updateContactList) {
-            ContactHeader contactHeader = this.sipServer.getSipHeaderFactory().createContactHeader(this.sipServer.getSipAddressFactory().createAddress(this.sipAccountDao.getSystemUserDao().getDisplayName(), proxyUri));
-            okResponse.addHeader(contactHeader);
+    public void sessionRequestReceived(RequestEvent requestEvent) throws TalkSipServerException {
+        try {
+            if (this.getState() != SipRegistrationAuthenticationState.AUTHENTICATED) {
+                this.logger.info("Cannot process session request on unauthenticated client");
+            } else {
+                ToHeader toHeader = (ToHeader) requestEvent.getRequest().getHeader(ToHeader.NAME);
+                SipSession sipSession = null;
+                for (SipSession session : this.sipServer.getSipSessionList()) {
+                    if (session.getCallerRegistration() == this && session.getCalleeRegistration().isAvailableAtAddress(toHeader.getAddress())) {
+                        sipSession = session;
+                        break;
+                    }
+                }
+                if (sipSession == null) {
+                    SipExtensionDao extensionLookup = DatabaseObjectFactory.getInstance().find(SipExtensionDao.class, new BasicDBObject("Extension", ((SipUri) toHeader.getAddress().getURI()).getUser()));
+                    if (extensionLookup == null) {
+                        this.sipServer.sendNotFound(requestEvent);
+                        this.logger.info("Callee not found " + toHeader.getAddress().toString());
+                    } else if (!extensionLookup.isEnabled()) {
+                        this.sipServer.sendTemporarilyUnavailable(requestEvent);
+                        this.logger.info("Callee extension is not enabled " + toHeader.getAddress().toString());
+                    } else {
+                        SipRegistration calleeRegistration = null;
+                        for (SipRegistration reg : this.sipServer.getSipRegistrationList()) {
+                            if (reg.isAvailableAtAddress(toHeader.getAddress())) {
+                                calleeRegistration = reg;
+                                break;
+                            }
+                        }
+                        if (calleeRegistration == null) {
+                            this.sipServer.sendTemporarilyUnavailable(requestEvent);
+                            this.logger.info("Callee is not registered " + toHeader.getAddress().toString());
+                        } else if (this == calleeRegistration) {
+                            this.sipServer.sendServiceUnavailable(requestEvent);
+                            this.logger.info("Caller attempted to call himself " + toHeader.getAddress().toString());
+                        } else {
+                            sipSession = new SipSession(this, calleeRegistration);
+                            this.sipServer.getSipSessionList().add(sipSession);
+                        }
+                    }
+                }
+                if (sipSession != null) {
+                    sipSession.sessionRequestReceived(requestEvent);
+                }
+            }
+        } catch (TalkSipServerException | TalkSipSessionException ex) {
+            throw new TalkSipServerException("Failed processing session request", ex);
         }
-        this.sipServer.sendResponse(okResponse);
     }
 
-    private void sendResponseUnauthorized(Request request) throws TalkSipServerException, ParseException {
-        Response unauthorizedResponse = this.sipServer.getSipMessageFactory().createResponse(Response.UNAUTHORIZED, request);
-        this.sipServer.sendResponse(unauthorizedResponse);
+    private void unregister(RequestEvent requestEvent) throws TalkSipServerException {
+        try {
+            Response okResponse = this.getSipServer().getSipMessageFactory().createResponse(Response.OK, requestEvent.getRequest());
+            this.sipServer.sendResponse(requestEvent, okResponse);
+            this.getSipServer().removeSipRegistration(this);
+            this.logger.info("User " + this.getSipAccountDao().getUsername() + "@" + this.getSipServer().getSipDomain() + " unregistered from " + this.getRemoteHost() + ":" + this.getRemotePort());
+            this.state = SipRegistrationAuthenticationState.UNREGISTERED;
+        } catch (ParseException ex) {
+            throw new TalkSipServerException("Error unregistering", ex);
+        }
+    }
+
+    private void sendResponseOk(RequestEvent requestEvent, boolean updateContactList) throws TalkSipServerException {
+        try {
+            Response okResponse = this.getSipServer().getSipMessageFactory().createResponse(Response.OK, requestEvent.getRequest());
+            if (updateContactList) {
+                for (ContactHeader ch : this.registeredContactHeaderList) {
+                    okResponse.addHeader(ch);
+                }
+            }
+            this.sipServer.sendResponse(requestEvent, okResponse);
+        } catch (ParseException ex) {
+            throw new TalkSipServerException("Error responding", ex);
+        }
+    }
+
+    private void sendResponseUnauthorized(RequestEvent requestEvent) throws TalkSipServerException, ParseException {
+        Response response = this.sipServer.getSipMessageFactory().createResponse(Response.UNAUTHORIZED, requestEvent.getRequest());
+        this.sipServer.sendResponse(requestEvent, response);
+
     }
 
     private String generateDigestResponseMd5(String username, String realm, String plaintextPassword) throws UnsupportedEncodingException, NoSuchAlgorithmException {
@@ -145,5 +230,32 @@ public class SipRegistration {
 
     public int getRemotePort() {
         return remotePort;
+    }
+
+    public SipRegistrationAuthenticationState getState() {
+        return state;
+    }
+
+    public SipRegistrationCallState getCallState() {
+        return callState;
+    }
+
+    public SipServer getSipServer() {
+        return sipServer;
+    }
+
+    public boolean isAvailableAtAddress(Address address) {
+        for (ContactHeader ch : this.registeredContactHeaderList) {
+            SipUri su = (SipUri) ch.getAddress().getURI();
+            SipUri su2 = (SipUri) address.getURI();
+            if (su.getHost().equals(su2.getHost()) && su.getUser().equals(su2.getUser())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public SipAccountDao getSipAccountDao() {
+        return sipAccountDao;
     }
 }

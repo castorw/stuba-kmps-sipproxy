@@ -28,10 +28,11 @@ import org.slf4j.LoggerFactory;
 import net.ctrdn.talk.portal.api.ApiMethodRegistry;
 import net.ctrdn.talk.sip.SipServer;
 import net.ctrdn.talk.system.SipAccountDao;
+import net.ctrdn.talk.system.SipExtensionDao;
 import net.ctrdn.talk.system.SystemUserSessionDao;
 
 public class ProxyController {
-
+    
     private final File configurationFile = new File("talkd.properties");
     private final Logger logger = LoggerFactory.getLogger(ProxyController.class);
     private final List<SystemUserSessionDao> activePortalSessionList = new ArrayList<>();
@@ -39,7 +40,7 @@ public class ProxyController {
     private DB database;
     private Properties configuration;
     private SipServer sipServer;
-
+    
     public void initialize() {
         try {
             this.loadConfiguration();
@@ -48,22 +49,22 @@ public class ProxyController {
             this.initializePortalApi();
             this.startSipServer();
             this.startWebserver();
-
+            
             this.logger.info("Successfully initialized proxy controller");
         } catch (TalkException ex) {
             this.logger.error("Proxy controller initialization failed", ex);
         }
     }
-
+    
     private void startSipServer() throws ConfigurationException, InitializationException {
         this.sipServer = new SipServer(this);
         this.sipServer.start();
     }
-
+    
     private void initializePortalApi() throws InitializationException {
         ApiMethodRegistry.initalize();
     }
-
+    
     private void loadConfiguration() throws ConfigurationException {
         if (!this.configurationFile.exists()) {
             throw new ConfigurationException("Failed to locate configuration file talkd.properties");
@@ -75,11 +76,11 @@ public class ProxyController {
             throw new ConfigurationException("Failed to load configuration file", ex);
         }
     }
-
+    
     public boolean configurationPropertyExists(String propertyName) throws ConfigurationException {
         return this.configurationPropertyExists(propertyName, true);
     }
-
+    
     private boolean configurationPropertyExists(String propertyName, boolean mandatory) throws ConfigurationException {
         boolean e = this.getConfiguration().getProperty(propertyName) != null && !this.configuration.getProperty(propertyName).trim().isEmpty();
         if (!e && mandatory) {
@@ -87,7 +88,7 @@ public class ProxyController {
         }
         return e;
     }
-
+    
     private void connectDatabase() throws ConfigurationException, InitializationException {
         this.configurationPropertyExists("talk.db.host");
         this.configurationPropertyExists("talk.db.port");
@@ -100,13 +101,14 @@ public class ProxyController {
             throw new InitializationException("Failed to establish database connection", ex);
         }
     }
-
+    
     private void mapDatabase() {
         DatabaseObjectFactory.addCollectionMapping(SystemUserDao.class, this.database.getCollection("core.user"));
         DatabaseObjectFactory.addCollectionMapping(SystemUserSessionDao.class, this.database.getCollection("core.user.session"));
         DatabaseObjectFactory.addCollectionMapping(SipAccountDao.class, this.database.getCollection("telephony.sip.account"));
+        DatabaseObjectFactory.addCollectionMapping(SipExtensionDao.class, this.database.getCollection("telephony.sip.extension"));
     }
-
+    
     private void startWebserver() throws ConfigurationException, InitializationException {
         this.configurationPropertyExists("talk.portal.webserver.port");
         try {
@@ -114,7 +116,7 @@ public class ProxyController {
             sch.setContextPath("/");
             sch.addServlet(new ServletHolder(new ApiServlet(this)), "/api/*");
             sch.addServlet(new ServletHolder(new ResourceServlet(this)), "/*");
-
+            
             Server server = new Server(Integer.parseInt(this.getConfiguration().getProperty("talk.portal.webserver.port")));
             server.setHandler(sch);
             server.start();
@@ -123,11 +125,11 @@ public class ProxyController {
             throw new InitializationException("Failed to start portal webserver", ex);
         }
     }
-
+    
     public List<SystemUserSessionDao> getActivePortalSessionList() {
         return this.activePortalSessionList;
     }
-
+    
     public void checkPortalSession(SystemUserSessionDao sessionDao) throws PortalAuthenticationException {
         if (new Date().getTime() - sessionDao.getLastActivityDate().getTime() > 1800000) {
             sessionDao.endSession();
@@ -136,12 +138,12 @@ public class ProxyController {
         sessionDao.setLastActivityDate(new Date());
         sessionDao.store();
     }
-
+    
     public SystemUserSessionDao getPortalSessionDao(HttpSession session) {
         SystemUserSessionDao sessionDao = (SystemUserSessionDao) session.getAttribute("UserSession");
         return sessionDao;
     }
-
+    
     public void writeConfiguration() {
         try {
             try (FileOutputStream fos = new FileOutputStream(this.configurationFile)) {
@@ -151,11 +153,11 @@ public class ProxyController {
             this.logger.error("Failed to write configuration", ex);
         }
     }
-
+    
     public Properties getConfiguration() {
         return configuration;
     }
-
+    
     public SipServer getSipServer() {
         return sipServer;
     }
