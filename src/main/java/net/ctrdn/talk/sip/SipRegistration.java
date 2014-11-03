@@ -11,10 +11,10 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.sip.RequestEvent;
 import javax.sip.address.Address;
+import javax.sip.header.CallIdHeader;
 import javax.sip.header.ContactHeader;
 import javax.sip.header.ProxyAuthorizationHeader;
 import javax.sip.header.ToHeader;
-import javax.sip.header.ViaHeader;
 import javax.sip.message.Response;
 import net.ctrdn.talk.core.common.DatabaseObjectFactory;
 import net.ctrdn.talk.exception.TalkSipServerException;
@@ -129,9 +129,11 @@ public class SipRegistration {
                 this.logger.info("Cannot process session request on unauthenticated client");
             } else {
                 ToHeader toHeader = (ToHeader) requestEvent.getRequest().getHeader(ToHeader.NAME);
+                CallIdHeader callIdHeader = (CallIdHeader) requestEvent.getRequest().getHeader(CallIdHeader.NAME);
                 SipSession sipSession = null;
                 for (SipSession session : this.sipServer.getSipSessionList()) {
-                    if (session.getCallerRegistration() == this && session.getCalleeRegistration().isAvailableAtAddress(toHeader.getAddress())) {
+                    if (session.getState() != SipSessionState.ENDED && ((session.getCallerRegistration() == this && session.getCalleeRegistration().isAvailableAtAddress(toHeader.getAddress()))
+                            || (callIdHeader != null && session.getCallIdHeader().getCallId().equals(callIdHeader.getCallId())))) {
                         sipSession = session;
                         break;
                     }

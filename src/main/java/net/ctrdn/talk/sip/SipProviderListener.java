@@ -5,14 +5,10 @@ import javax.sip.IOExceptionEvent;
 import javax.sip.RequestEvent;
 import javax.sip.ResponseEvent;
 import javax.sip.SipListener;
-import javax.sip.SipProvider;
 import javax.sip.TimeoutEvent;
 import javax.sip.TransactionTerminatedEvent;
-import javax.sip.address.AddressFactory;
 import javax.sip.header.CallIdHeader;
-import javax.sip.header.HeaderFactory;
 import javax.sip.header.ViaHeader;
-import javax.sip.message.MessageFactory;
 import javax.sip.message.Request;
 import net.ctrdn.talk.core.ProxyController;
 import net.ctrdn.talk.exception.TalkSipException;
@@ -25,19 +21,9 @@ public class SipProviderListener implements SipListener {
 
     private final Logger logger = LoggerFactory.getLogger(SipProviderListener.class);
     private final SipServer sipServer;
-    private final SipProvider sipProvider;
-    private final MessageFactory sipMessageFactory;
-    private final HeaderFactory sipHeaderFactory;
-    private final AddressFactory sipAddressFactory;
-    private final ProxyController proxyController;
 
     public SipProviderListener(ProxyController proxyController, SipServer sipServer) {
-        this.proxyController = proxyController;
         this.sipServer = sipServer;
-        this.sipProvider = this.sipServer.getSipProvider();
-        this.sipAddressFactory = this.sipServer.getSipAddressFactory();
-        this.sipHeaderFactory = this.sipServer.getSipHeaderFactory();
-        this.sipMessageFactory = this.sipServer.getSipMessageFactory();
     }
 
     @Override

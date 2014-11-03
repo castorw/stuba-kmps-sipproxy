@@ -56,7 +56,6 @@ public class SipServer {
     private final MessageFactory sipMessageFactory;
     private final HeaderFactory sipHeaderFactory;
     private final AddressFactory sipAddressFactory;
-    private Date startDate;
     private SipProvider sipProvider = null;
     private SipProviderListener sipProviderListener;
     private final String sipDomain;
@@ -93,7 +92,6 @@ public class SipServer {
 
     public void start() throws InitializationException {
         try {
-            this.startDate = new Date();
             boolean enabled = this.proxyController.getConfiguration().getProperty("talk.sip.server.enabled").equals("true");
             if (enabled) {
                 this.sipProviderListener = new SipProviderListener(this.proxyController, this);
@@ -104,6 +102,10 @@ public class SipServer {
         } catch (InvalidArgumentException | NumberFormatException | TransportNotSupportedException | ObjectInUseException | TooManyListenersException ex) {
             throw new InitializationException("Failed to start SIP server", ex);
         }
+    }
+
+    public String generateBranch() {
+        return "z9hG4bK-talkd-" + Long.toString(new Date().getTime());
     }
 
     public void sendResponse(ServerTransaction st, Response response) throws TalkSipServerException {
@@ -223,20 +225,20 @@ public class SipServer {
         }
     }
 
-    public void attachProxyViaHeader(Request request) throws ParseException, TalkSipServerException {
+    public void attachProxyViaHeader(Request request, String branch) throws ParseException, TalkSipServerException {
         try {
             request.removeHeader(ViaHeader.NAME);
-            ViaHeader viaHeader = this.getSipHeaderFactory().createViaHeader(this.getSipDomain(), this.getSipPort(), this.getSipTransport(), "z9hG4bK-talkd-" + Long.toString(this.startDate.getTime()));
+            ViaHeader viaHeader = this.getSipHeaderFactory().createViaHeader(this.getSipDomain(), this.getSipPort(), this.getSipTransport(), branch);
             request.addFirst(viaHeader);
         } catch (InvalidArgumentException | ParseException | SipException ex) {
             throw new TalkSipServerException("Failed to fix-up Via header on request", ex);
         }
     }
 
-    public void attachProxyViaHeader(Response response) throws ParseException, TalkSipServerException {
+    public void attachProxyViaHeader(Response response, String branch) throws ParseException, TalkSipServerException {
         try {
             response.removeHeader(ViaHeader.NAME);
-            ViaHeader viaHeader = this.getSipHeaderFactory().createViaHeader(this.getSipDomain(), this.getSipPort(), this.getSipTransport(), "z9hG4bK-talkd-" + Long.toString(this.startDate.getTime()));
+            ViaHeader viaHeader = this.getSipHeaderFactory().createViaHeader(this.getSipDomain(), this.getSipPort(), this.getSipTransport(), branch);
             response.addFirst(viaHeader);
         } catch (InvalidArgumentException | ParseException | SipException ex) {
             throw new TalkSipServerException("Failed to fix-up Via header on response", ex);
@@ -266,13 +268,13 @@ public class SipServer {
         }
     }
 
-    public void forwardRequest(SipRegistration sourceRegistration, SipRegistration targetRegistration, Request request) throws TalkSipServerException {
+    public void forwardRequest(SipRegistration sourceRegistration, SipRegistration targetRegistration, Request request, String branch) throws TalkSipServerException {
         try {
             if (sourceRegistration == null || targetRegistration == null) {
                 throw new TalkSipServerException("Cannot forward request with no source and target provided");
             }
 
-            this.attachProxyViaHeader(request);
+            this.attachProxyViaHeader(request, branch);
 
             SipUri requestUri = (SipUri) request.getRequestURI();
             requestUri.setHost(targetRegistration.getRemoteHost());
