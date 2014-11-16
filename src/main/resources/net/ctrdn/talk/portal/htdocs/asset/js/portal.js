@@ -1,4 +1,4 @@
-function call_swswitch_api(call_name, callback) {
+function call_talk_api(call_name, callback) {
     $.post("/api/" + call_name, null, function(data) {
         if (data.Status !== true) {
             alert("ApiError: " + data.Error);
@@ -10,7 +10,7 @@ function call_swswitch_api(call_name, callback) {
     }, 'json');
 }
 
-function call_swswitch_api_params(call_name, post_data, callback) {
+function call_talk_api_params(call_name, post_data, callback) {
     $.post("/api/" + call_name, post_data, function(data) {
         if (data.Status !== true) {
             alert("ApiError: " + data.Error);
@@ -24,7 +24,7 @@ function call_swswitch_api_params(call_name, post_data, callback) {
 
 function get_form_data(form_object) {
     var data = {};
-    $("input[data-form-id]", form_object).each(function() {
+    $("input[data-form-id], select[data-form-id]", form_object).each(function() {
         var element_id = $(this).attr("data-form-id");
         var element_type = $(this).attr("type");
         if (element_id.trim() === "") {
@@ -47,6 +47,10 @@ function clear_form(form_object) {
             $(this).val("");
             $(this).prop("disabled", false);
         }
+    });
+    $("select[data-form-id] option").each(function() {
+        $(this).prop("selected", false);
+        $(this).prop("disabled", false);
     });
     $(".form-error-placeholder", form_object).html("");
 }
@@ -175,6 +179,18 @@ function format_date(timestamp, fmt) {
     });
 }
 
+var guid = (function() {
+    function s4() {
+        return Math.floor((1 + Math.random()) * 0x10000)
+                .toString(16)
+                .substring(1);
+    }
+    return function() {
+        return s4() + s4() + '-' + s4() + '-' + s4() + '-' +
+                s4() + '-' + s4() + s4() + s4();
+    };
+})();
+
 $(document).ready(function() {
     $("a[data-call-api]").click(function() {
         var call_name = $(this).attr("data-call-api");
@@ -184,13 +200,13 @@ $(document).ready(function() {
                 return;
             }
         }
-        call_swswitch_api(call_name, null);
+        call_talk_api(call_name, null);
     });
 
     $("[data-toggle='tooltip']").tooltip();
     $("a[href='#logout']").click(function() {
         modal_confirm("Logout", "Are you sure you want to logout?", "primary", function() {
-            call_swswitch_api("system.user.logout", function(data) {
+            call_talk_api("system.user.logout", function(data) {
                 if (data.Response.Successful === true) {
                     location.href = data.Response.TargetUri;
                 } else {

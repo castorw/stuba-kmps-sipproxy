@@ -1,4 +1,4 @@
-package net.ctrdn.talk.portal.api.system;
+package net.ctrdn.talk.portal.api.telephony;
 
 import javax.json.Json;
 import javax.json.JsonObjectBuilder;
@@ -8,13 +8,13 @@ import net.ctrdn.talk.core.ProxyController;
 import net.ctrdn.talk.core.common.DatabaseObjectFactory;
 import net.ctrdn.talk.exception.ApiMethodException;
 import net.ctrdn.talk.portal.api.DefaultApiMethod;
-import net.ctrdn.talk.system.SystemUserDao;
+import net.ctrdn.talk.system.SipAccountDao;
 import org.bson.types.ObjectId;
 
-public class UserDeleteMethod extends DefaultApiMethod {
+public class SipAccountDeleteMethod extends DefaultApiMethod {
 
-    public UserDeleteMethod(ProxyController proxyController) {
-        super(proxyController, "system.user.delete");
+    public SipAccountDeleteMethod(ProxyController proxyController) {
+        super(proxyController, "telephony.sip-account.delete");
     }
 
     @Override
@@ -22,14 +22,11 @@ public class UserDeleteMethod extends DefaultApiMethod {
         JsonObjectBuilder responseJob = Json.createObjectBuilder();
         responseJob.add("Successful", false);
         ObjectId objectId = new ObjectId(request.getParameter("object-id"));
-        if (!proxyController.getPortalSessionDao(request.getSession()).getObjectId().equals(objectId)) {
-            SystemUserDao sudao = DatabaseObjectFactory.getInstance().find(SystemUserDao.class, objectId);
-            if (sudao != null) {
-                sudao.delete();
-                responseJob.add("Successful", true);
-            }
+        SipAccountDao accountDao = DatabaseObjectFactory.getInstance().find(SipAccountDao.class, objectId);
+        if (accountDao != null) {
+            accountDao.delete();
+            responseJob.add("Successful", true);
         }
         return responseJob;
     }
-
 }

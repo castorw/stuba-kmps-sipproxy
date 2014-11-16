@@ -28,7 +28,7 @@
 
         <script type="text/javascript">
             $(document).ready(function() {
-                call_swswitch_api_params("system.user.login", {"recover-cookie": true}, function(data) {
+                call_talk_api_params("system.user.login", {"recover-cookie": true}, function(data) {
                     if (data.Response.Successful === true) {
                         location.href = data.Response.TargetUrl;
                     }
@@ -39,7 +39,7 @@
                     event.preventDefault();
                     var form_data = get_form_data($(this));
                     var form_object = $(this);
-                    call_swswitch_api_params("system.user.login", form_data, function(data) {
+                    call_talk_api_params("system.user.login", form_data, function(data) {
                         if (data.UserError !== undefined) {
                             attach_form_alert(form_object, "alert-danger", "<strong>Error!</strong> <span>" + data.UserError + "</span>");
                             $("[data-form-id='username']").focus();

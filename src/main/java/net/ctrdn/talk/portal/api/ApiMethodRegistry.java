@@ -5,7 +5,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import net.ctrdn.talk.exception.ApiMethodException;
+import net.ctrdn.talk.core.ProxyController;
 import net.ctrdn.talk.exception.ApiRegistryException;
 import net.ctrdn.talk.exception.InitializationException;
 import org.reflections.Reflections;
@@ -16,6 +16,7 @@ public class ApiMethodRegistry {
 
     private final Logger logger = LoggerFactory.getLogger(ApiMethodRegistry.class);
     private static ApiMethodRegistry registry;
+    private static ProxyController proxyController;
     private final Map<String, Class<? extends ApiMethod>> methodClassMap = new ConcurrentHashMap<>();
 
     private ApiMethodRegistry() throws InitializationException {
@@ -23,8 +24,8 @@ public class ApiMethodRegistry {
         try {
             for (Class<?> foundClass : reflections.getSubTypesOf(ApiMethod.class)) {
                 if (!Modifier.isAbstract(foundClass.getModifiers())) {
-                    Constructor constructor = foundClass.getConstructor();
-                    ApiMethod instance = (ApiMethod) constructor.newInstance();
+                    Constructor constructor = foundClass.getConstructor(ProxyController.class);
+                    ApiMethod instance = (ApiMethod) constructor.newInstance(ApiMethodRegistry.proxyController);
                     String path = instance.getPath();
                     methodClassMap.put(path, (Class<? extends ApiMethod>) foundClass);
                     this.logger.trace("Adding API method " + path);
@@ -40,8 +41,8 @@ public class ApiMethodRegistry {
         if (this.methodClassMap.containsKey(path)) {
             try {
                 Class<? extends ApiMethod> clz = this.methodClassMap.get(path);
-                Constructor ctr = clz.getConstructor();
-                ApiMethod inst = (ApiMethod) ctr.newInstance();
+                Constructor ctr = clz.getConstructor(ProxyController.class);
+                ApiMethod inst = (ApiMethod) ctr.newInstance(ApiMethodRegistry.proxyController);
                 return inst;
             } catch (IllegalAccessException | IllegalArgumentException | InstantiationException | InvocationTargetException | NoSuchMethodException | SecurityException ex) {
                 throw new ApiRegistryException("Unable to instantinate API method", ex);
@@ -50,8 +51,9 @@ public class ApiMethodRegistry {
         return null;
     }
 
-    public static void initalize() throws InitializationException {
+    public static void initalize(ProxyController proxyController) throws InitializationException {
         ApiMethodRegistry.registry = new ApiMethodRegistry();
+        ApiMethodRegistry.proxyController = proxyController;
     }
 
     public static ApiMethodRegistry getInstance() {

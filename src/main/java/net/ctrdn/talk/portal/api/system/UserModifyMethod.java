@@ -3,7 +3,6 @@ package net.ctrdn.talk.portal.api.system;
 import com.mongodb.BasicDBObject;
 import java.io.UnsupportedEncodingException;
 import java.security.NoSuchAlgorithmException;
-import java.util.Date;
 import javax.json.Json;
 import javax.json.JsonObjectBuilder;
 import javax.servlet.http.HttpServletRequest;
@@ -18,13 +17,12 @@ import org.bson.types.ObjectId;
 
 public class UserModifyMethod extends DefaultApiMethod {
 
-    public UserModifyMethod() {
-        super("system.user.modify");
+    public UserModifyMethod(ProxyController proxyController) {
+        super(proxyController, "system.user.modify");
     }
 
     @Override
     public JsonObjectBuilder execute(ProxyController proxyController, HttpServletRequest request, HttpServletResponse response) throws ApiMethodException {
-        ObjectId inObjectId = new ObjectId(request.getParameter("object-id"));
         String inUsername = request.getParameter("username");
         String inDisplayName = request.getParameter("display-name");
         String inPassword = request.getParameter("password");

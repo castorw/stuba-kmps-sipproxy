@@ -20,8 +20,8 @@ import org.bson.types.ObjectId;
 
 public class UserLoginMethod extends DefaultApiMethod {
 
-    public UserLoginMethod() {
-        super("system.user.login");
+    public UserLoginMethod(ProxyController proxyController) {
+        super(proxyController, "system.user.login");
     }
 
     @Override

@@ -1,5 +1,8 @@
 package net.ctrdn.talk.sip;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import javax.sip.DialogTerminatedEvent;
 import javax.sip.IOExceptionEvent;
 import javax.sip.RequestEvent;
@@ -19,56 +22,85 @@ import org.slf4j.LoggerFactory;
 
 public class SipProviderListener implements SipListener {
 
+    private final ExecutorService requestExecutorService;
     private final Logger logger = LoggerFactory.getLogger(SipProviderListener.class);
     private final SipServer sipServer;
 
     public SipProviderListener(ProxyController proxyController, SipServer sipServer) {
         this.sipServer = sipServer;
+        ThreadFactory threadFactory = new ThreadFactory() {
+
+            private int id = 1;
+
+            @Override
+            public Thread newThread(Runnable r) {
+                Thread nt = new Thread(r);
+                nt.setDaemon(true);
+                nt.setName("SipEventProcessor-" + this.id);
+                this.id++;
+                return nt;
+            }
+        };
+        this.requestExecutorService = Executors.newFixedThreadPool(16, threadFactory);
     }
 
     @Override
-    public void processRequest(RequestEvent requestEvent) {
-        try {
-            this.logger.trace("Received SIP message\n" + requestEvent.getRequest().toString());
-            switch (requestEvent.getRequest().getMethod()) {
-                case "REGISTER": {
-                    this.processRegister(requestEvent);
-                    break;
-                }
-                case "BYE":
-                case "ACK":
-                case "CANCEL":
-                case "INVITE": {
-                    this.processSessionRequest(requestEvent);
-                    break;
-                }
-                default: {
-                    this.sipServer.sendNotImplemented(requestEvent);
-                    break;
+    public void processRequest(final RequestEvent requestEvent) {
+        this.requestExecutorService.submit(new Runnable() {
+
+            @Override
+            public void run() {
+                try {
+                    SipProviderListener.this.logger.trace("Received SIP message\n" + requestEvent.getRequest().toString());
+                    switch (requestEvent.getRequest().getMethod()) {
+                        case "REGISTER": {
+                            SipProviderListener.this.processRegister(requestEvent);
+                            break;
+                        }
+                        case "BYE":
+                        case "ACK":
+                        case "CANCEL":
+                        case "INVITE": {
+                            SipProviderListener.this.processSessionRequest(requestEvent);
+                            break;
+                        }
+                        default: {
+                            SipProviderListener.this.sipServer.sendNotImplemented(requestEvent);
+                            break;
+                        }
+                    }
+                } catch (Exception ex) {
+                    SipProviderListener.this.logger.warn("Error processing SIP request", ex);
                 }
             }
-        } catch (TalkSipException ex) {
-            this.logger.warn("Error processing SIP request", ex);
-        }
+        });
+
     }
 
     @Override
-    public void processResponse(ResponseEvent responseEvent) {
-        try {
-            this.logger.trace("Received SIP response\n" + responseEvent.getResponse().toString());
-            CallIdHeader callIdHeader = (CallIdHeader) responseEvent.getResponse().getHeader(CallIdHeader.NAME);
-            for (SipSession session : this.sipServer.getSipSessionList()) {
-                if (session.getCallIdHeader().getCallId().equals(callIdHeader.getCallId())) {
-                    session.sessionResponseReceived(responseEvent);
-                    break;
+    public void processResponse(final ResponseEvent responseEvent) {
+        this.requestExecutorService.submit(new Runnable() {
+
+            @Override
+            public void run() {
+                try {
+                    SipProviderListener.this.logger.trace("Received SIP response\n" + responseEvent.getResponse().toString());
+                    CallIdHeader callIdHeader = (CallIdHeader) responseEvent.getResponse().getHeader(CallIdHeader.NAME);
+                    for (SipSession session : SipProviderListener.this.sipServer.getSipSessionList()) {
+                        if (session.getCallIdHeader().getCallId().equals(callIdHeader.getCallId())) {
+                            session.sessionResponseReceived(responseEvent);
+                            break;
+                        }
+                    }
+                } catch (Exception ex) {
+                    SipProviderListener.this.logger.warn("Error processing SIP response", ex);
                 }
             }
-        } catch (TalkSipServerException ex) {
-            this.logger.warn("Error processing SIP response", ex);
-        }
+        });
     }
 
     @Override
+
     public void processTimeout(TimeoutEvent timeoutEvent) {
     }
 

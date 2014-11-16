@@ -8,7 +8,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import javax.sip.InvalidArgumentException;
 import javax.sip.RequestEvent;
 import javax.sip.address.Address;
 import javax.sip.header.CallIdHeader;
@@ -30,14 +32,17 @@ public class SipRegistration {
     // internal
     private final Logger logger = LoggerFactory.getLogger(SipRegistration.class);
     private final SipServer sipServer;
+    private final boolean forceRegistrationTimeout;
+    private final int forcedRegistrationTimeout;
 
     // state description
     private final List<ContactHeader> registeredContactHeaderList = new ArrayList<>();
     private String remoteHost;
     private int remotePort;
     private SipRegistrationAuthenticationState state = SipRegistrationAuthenticationState.STARTED;
-    private SipRegistrationCallState callState = SipRegistrationCallState.IDLE;
+    private Date lastRegisterResponseSendDate;
     private SipAccountDao sipAccountDao = null;
+    private Integer activeExpireTime = null;
 
     // helpers
     private final DigestServerAuthenticationHelper authenticationHelper;
@@ -48,6 +53,14 @@ public class SipRegistration {
             this.remoteHost = remoteHost;
             this.remotePort = remotePort;
             this.authenticationHelper = new DigestServerAuthenticationHelper();
+            this.forceRegistrationTimeout = this.sipServer.getProxyController().getConfiguration().getProperty("talk.sip.register.force-timeout", "true").equals("true");
+            this.forcedRegistrationTimeout = Integer.parseInt(this.sipServer.getProxyController().getConfiguration().getProperty("talk.sip.register.force-timeout.time", "60"));
+            if (this.forceRegistrationTimeout) {
+                this.logger.info("Registration timeout is forced to {} seconds", this.forcedRegistrationTimeout);
+                if (this.forcedRegistrationTimeout < 60) {
+                    throw new RuntimeException(new TalkSipServerException("Minimum for forced registration interval is 60 seconds"));
+                }
+            }
         } catch (NoSuchAlgorithmException ex) {
             throw new TalkSipRegistrationException("Failed to create SIP session", ex);
         }
@@ -84,6 +97,9 @@ public class SipRegistration {
                     if (lookupAccountDao == null) {
                         this.sendResponseUnauthorized(requestEvent);
                         throw new TalkSipRegistrationException("User not found in database: " + lookupUsername);
+                    } else if (!lookupAccountDao.getEnabled()) {
+                        this.sendResponseUnauthorized(requestEvent);
+                        throw new TalkSipRegistrationException("Account is disabled: " + lookupUsername);
                     }
                     boolean authStatus = this.authenticationHelper.doAuthenticateHashedPassword(requestEvent.getRequest(), this.generateDigestResponseMd5(lookupUsername, lookupRealm, lookupAccountDao.getPlaintextPassword()));
                     if (!authStatus) {
@@ -109,10 +125,18 @@ public class SipRegistration {
                     }
 
                     this.sendResponseOk(requestEvent, true);
+                    this.getSipAccountDao().setLastLoginDate(new Date());
+                    this.getSipAccountDao().store();
                     this.logger.info("Remote " + this.getRemoteHost() + ":" + this.getRemotePort() + " has successfully authenticated as " + lookupUsername + "@" + lookupRealm);
                     break;
                 }
                 case AUTHENTICATED: {
+                    int rxExpireTime = requestEvent.getRequest().getExpires().getExpires();
+                    if (this.forceRegistrationTimeout) {
+                        this.activeExpireTime = this.forcedRegistrationTimeout;
+                    } else {
+                        this.activeExpireTime = rxExpireTime;
+                    }
                     this.sendResponseOk(requestEvent, true);
                     this.logger.debug("Updated contact list for  " + this.getSipAccountDao().getUsername() + "@" + this.getSipServer().getSipDomain() + " at " + this.getRemoteHost() + ":" + this.getRemotePort());
                     break;
@@ -133,7 +157,7 @@ public class SipRegistration {
                 SipSession sipSession = null;
                 for (SipSession session : this.sipServer.getSipSessionList()) {
                     if (session.getState() != SipSessionState.ENDED && ((session.getCallerRegistration() == this && session.getCalleeRegistration().isAvailableAtAddress(toHeader.getAddress()))
-                            || (callIdHeader != null && session.getCallIdHeader().getCallId().equals(callIdHeader.getCallId())))) {
+                            || (callIdHeader != null && session.getCallIdHeader() != null && session.getCallIdHeader().getCallId().equals(callIdHeader.getCallId())))) {
                         sipSession = session;
                         break;
                     }
@@ -187,16 +211,26 @@ public class SipRegistration {
         }
     }
 
+    public void timedOut() {
+        this.logger.info("Registration for {} timed out", this.sipAccountDao.getUsername());
+        this.state = SipRegistrationAuthenticationState.UNREGISTERED;
+        this.getSipServer().removeSipRegistration(this);
+    }
+
     private void sendResponseOk(RequestEvent requestEvent, boolean updateContactList) throws TalkSipServerException {
         try {
             Response okResponse = this.getSipServer().getSipMessageFactory().createResponse(Response.OK, requestEvent.getRequest());
+            if (this.forceRegistrationTimeout) {
+                okResponse.setExpires(this.sipServer.getSipHeaderFactory().createExpiresHeader(this.forcedRegistrationTimeout));
+            }
             if (updateContactList) {
                 for (ContactHeader ch : this.registeredContactHeaderList) {
                     okResponse.addHeader(ch);
                 }
             }
             this.sipServer.sendResponse(requestEvent, okResponse);
-        } catch (ParseException ex) {
+            this.lastRegisterResponseSendDate = new Date();
+        } catch (ParseException | InvalidArgumentException ex) {
             throw new TalkSipServerException("Error responding", ex);
         }
     }
@@ -233,10 +267,6 @@ public class SipRegistration {
         return state;
     }
 
-    public SipRegistrationCallState getCallState() {
-        return callState;
-    }
-
     public SipServer getSipServer() {
         return sipServer;
     }
@@ -254,5 +284,13 @@ public class SipRegistration {
 
     public SipAccountDao getSipAccountDao() {
         return sipAccountDao;
+    }
+
+    public Date getLastRegisterResponseSendDate() {
+        return lastRegisterResponseSendDate;
+    }
+
+    public Integer getActiveExpireTime() {
+        return activeExpireTime;
     }
 }

@@ -9,6 +9,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Properties;
 import java.util.TooManyListenersException;
+import java.util.concurrent.CopyOnWriteArrayList;
 import javax.sip.ClientTransaction;
 import javax.sip.InvalidArgumentException;
 import javax.sip.ListeningPoint;
@@ -42,11 +43,47 @@ import net.ctrdn.talk.core.common.DatabaseObjectFactory;
 import net.ctrdn.talk.exception.ConfigurationException;
 import net.ctrdn.talk.exception.InitializationException;
 import net.ctrdn.talk.exception.TalkSipServerException;
+import net.ctrdn.talk.rtp.AlgProvider;
 import net.ctrdn.talk.system.SipExtensionDao;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class SipServer {
+
+    public AlgProvider getRtpAlgProvider() {
+        return rtpAlgProvider;
+    }
+
+    private class RegistrationWatchdog implements Runnable {
+
+        private final static int SLEEP_DURATION = 1000;
+        private boolean running = true;
+
+        @Override
+        public void run() {
+            try {
+                while (this.isRunning()) {
+                    Date currentDate = new Date();
+                    for (SipRegistration registration : SipServer.this.getSipRegistrationList()) {
+                        if (registration.getActiveExpireTime() != null && currentDate.getTime() - registration.getLastRegisterResponseSendDate().getTime() > registration.getActiveExpireTime() * 1000) {
+                            registration.timedOut();
+                        }
+                    }
+                    Thread.sleep(RegistrationWatchdog.SLEEP_DURATION);
+                }
+            } catch (InterruptedException ex) {
+                SipServer.this.logger.warn("SIP Registration Watchdog has been interrupted", ex);
+            }
+        }
+
+        public boolean isRunning() {
+            return running;
+        }
+
+        public void stop() {
+            this.running = false;
+        }
+    }
 
     private final static String USER_AGENT = "Talk Telephony Server/1.0.0";
     private final Logger logger = LoggerFactory.getLogger(SipServer.class);
@@ -61,8 +98,11 @@ public class SipServer {
     private final String sipDomain;
     private final int sipPort;
     private final String sipTransport;
-    private final List<SipRegistration> sipRegistrationList = new ArrayList<>();
-    private final List<SipSession> sipSessionList = new ArrayList<>();
+    private final List<SipRegistration> sipRegistrationList = new CopyOnWriteArrayList<>();
+    private final List<SipSession> sipSessionList = new CopyOnWriteArrayList<>();
+    private final RegistrationWatchdog registrationWatchdog;
+    private Thread registrationWatchdogThread;
+    private AlgProvider rtpAlgProvider = null;
 
     public SipServer(ProxyController proxyController) throws ConfigurationException, InitializationException {
         try {
@@ -72,6 +112,8 @@ public class SipServer {
             this.proxyController.configurationPropertyExists("talk.sip.server.listen.host");
             this.proxyController.configurationPropertyExists("talk.sip.server.listen.port");
             this.proxyController.configurationPropertyExists("talk.sip.server.listen.transport");
+            this.proxyController.configurationPropertyExists("talk.rtp.alg.enabled");
+            this.proxyController.configurationPropertyExists("talk.rtp.alg.listen.host");
 
             this.sipDomain = this.proxyController.getConfiguration().getProperty("talk.sip.server.domain");
             this.sipPort = Integer.parseInt(this.proxyController.getConfiguration().getProperty("talk.sip.server.listen.port"));
@@ -85,6 +127,8 @@ public class SipServer {
             this.sipMessageFactory = this.sipFactory.createMessageFactory();
             this.sipHeaderFactory = this.sipFactory.createHeaderFactory();
             this.sipAddressFactory = this.sipFactory.createAddressFactory();
+
+            this.registrationWatchdog = new RegistrationWatchdog();
         } catch (PeerUnavailableException ex) {
             throw new InitializationException("Failed to initialize SIP stack", ex);
         }
@@ -92,12 +136,20 @@ public class SipServer {
 
     public void start() throws InitializationException {
         try {
-            boolean enabled = this.proxyController.getConfiguration().getProperty("talk.sip.server.enabled").equals("true");
+            boolean enabled = this.getProxyController().getConfiguration().getProperty("talk.sip.server.enabled").equals("true");
             if (enabled) {
-                this.sipProviderListener = new SipProviderListener(this.proxyController, this);
-                ListeningPoint lp = this.sipStack.createListeningPoint(this.proxyController.getConfiguration().getProperty("talk.sip.server.listen.host"), Integer.parseInt(this.proxyController.getConfiguration().getProperty("talk.sip.server.listen.port")), this.proxyController.getConfiguration().getProperty("talk.sip.server.listen.transport"));
+                if (this.proxyController.getConfiguration().getProperty("talk.rtp.alg.enabled", "true").equals("true")) {
+                    this.rtpAlgProvider = new AlgProvider(this.proxyController);
+                    this.getRtpAlgProvider().setListenHostAddress(this.proxyController.getConfiguration().getProperty("talk.rtp.alg.listen.host"));
+                }
+
+                this.sipProviderListener = new SipProviderListener(this.getProxyController(), this);
+                ListeningPoint lp = this.sipStack.createListeningPoint(this.getProxyController().getConfiguration().getProperty("talk.sip.server.listen.host"), Integer.parseInt(this.getProxyController().getConfiguration().getProperty("talk.sip.server.listen.port")), this.getProxyController().getConfiguration().getProperty("talk.sip.server.listen.transport"));
                 this.sipProvider = this.sipStack.createSipProvider(lp);
                 this.getSipProvider().addSipListener(this.sipProviderListener);
+                this.registrationWatchdogThread = new Thread(this.registrationWatchdog);
+                this.registrationWatchdogThread.setName("SipRegistrationWatchdog");
+                this.registrationWatchdogThread.start();
             }
         } catch (InvalidArgumentException | NumberFormatException | TransportNotSupportedException | ObjectInUseException | TooManyListenersException ex) {
             throw new InitializationException("Failed to start SIP server", ex);
@@ -383,5 +435,13 @@ public class SipServer {
 
     public String getSipTransport() {
         return sipTransport;
+    }
+
+    protected ProxyController getProxyController() {
+        return proxyController;
+    }
+
+    public boolean isRtpAlgAvailable() {
+        return this.rtpAlgProvider != null;
     }
 }

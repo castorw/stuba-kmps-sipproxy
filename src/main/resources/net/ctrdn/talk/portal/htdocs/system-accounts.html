@@ -9,7 +9,7 @@
     });
 
     function load_table() {
-        call_swswitch_api("system.user.list", function(data) {
+        call_talk_api("system.user.list", function(data) {
             user_cache = data.Response.SystemUserList;
 
             var tbHtml = "";
@@ -35,7 +35,7 @@
             $("#userTable tbody [data-delete-id]").click(function() {
                 var id = $(this).attr("data-delete-id");
                 modal_confirm("Confirm removal", "Are you sure you want to delete the user <strong>" + user_cache[id].Username + "</strong> ?", "danger", function() {
-                    call_swswitch_api_params("system.user.delete", {"object-id": user_cache[id].ObjectId}, function(data) {
+                    call_talk_api_params("system.user.delete", {"object-id": user_cache[id].ObjectId}, function(data) {
                         load_table();
                         $("#md-new-user").removeClass("md-show");
                     });
@@ -71,7 +71,7 @@
             var form_data = get_form_data($(this));
             var form_object = $(this);
             if (user_edit_id === null) {
-                call_swswitch_api_params("system.user.create", form_data, function(data) {
+                call_talk_api_params("system.user.create", form_data, function(data) {
                     if (data.UserError !== undefined) {
                         attach_form_alert(form_object, "alert-danger", "<strong>Error!</strong> <span>" + data.UserError + "</span>");
                     } else {
@@ -82,7 +82,7 @@
                 });
             } else {
                 form_data["object-id"] = user_cache[user_edit_id].ObjectId;
-                call_swswitch_api_params("system.user.modify", form_data, function(data) {
+                call_talk_api_params("system.user.modify", form_data, function(data) {
                     if (data.UserError !== undefined) {
                         attach_form_alert(form_object, "alert-danger", "<strong>Error!</strong> <span>" + data.UserError + "</span>");
                     } else {

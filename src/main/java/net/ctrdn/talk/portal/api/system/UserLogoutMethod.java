@@ -12,8 +12,8 @@ import net.ctrdn.talk.system.SystemUserSessionDao;
 
 public class UserLogoutMethod extends DefaultApiMethod {
 
-    public UserLogoutMethod() {
-        super("system.user.logout");
+    public UserLogoutMethod(ProxyController proxyController) {
+        super(proxyController, "system.user.logout");
     }
 
     @Override

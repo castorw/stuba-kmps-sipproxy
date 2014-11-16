@@ -3,6 +3,7 @@ package net.ctrdn.talk.portal.api;
 import java.util.Date;
 import javax.json.JsonObjectBuilder;
 import javax.servlet.http.HttpServletRequest;
+import net.ctrdn.talk.core.ProxyController;
 import net.ctrdn.talk.system.SystemUserSessionDao;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,10 +11,12 @@ import org.slf4j.LoggerFactory;
 abstract public class DefaultApiMethod implements ApiMethod {
 
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
+    private final ProxyController proxyController;
     private final String path;
 
-    protected DefaultApiMethod(String path) {
+    protected DefaultApiMethod(ProxyController proxyController, String path) {
         this.path = path;
+        this.proxyController = proxyController;
     }
 
     @Override
@@ -52,5 +55,9 @@ abstract public class DefaultApiMethod implements ApiMethod {
             idString += "/" + ((SystemUserSessionDao) request.getSession().getAttribute("UserSession")).getUser().getUsername();
         }
         return idString + "]";
+    }
+
+    protected ProxyController getProxyController() {
+        return this.proxyController;
     }
 }

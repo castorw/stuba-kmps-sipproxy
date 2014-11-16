@@ -17,8 +17,8 @@ import net.ctrdn.talk.system.SystemUserDao;
 
 public class UserCreateMethod extends DefaultApiMethod {
 
-    public UserCreateMethod() {
-        super("system.user.create");
+    public UserCreateMethod(ProxyController proxyController) {
+        super(proxyController, "system.user.create");
     }
 
     @Override

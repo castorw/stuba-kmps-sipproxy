@@ -14,8 +14,8 @@ import net.ctrdn.talk.system.SystemUserDao;
 
 public class UserListMethod extends DefaultApiMethod {
 
-    public UserListMethod() {
-        super("system.user.list");
+    public UserListMethod(ProxyController proxyController) {
+        super(proxyController, "system.user.list");
     }
 
     @Override
