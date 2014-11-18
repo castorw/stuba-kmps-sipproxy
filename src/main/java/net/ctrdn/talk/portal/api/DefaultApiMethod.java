@@ -4,7 +4,7 @@ import java.util.Date;
 import javax.json.JsonObjectBuilder;
 import javax.servlet.http.HttpServletRequest;
 import net.ctrdn.talk.core.ProxyController;
-import net.ctrdn.talk.system.SystemUserSessionDao;
+import net.ctrdn.talk.dao.SystemUserSessionDao;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

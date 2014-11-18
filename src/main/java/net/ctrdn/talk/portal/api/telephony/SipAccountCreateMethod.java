@@ -11,23 +11,25 @@ import net.ctrdn.talk.core.common.DatabaseObjectFactory;
 import net.ctrdn.talk.exception.ApiMethodException;
 import net.ctrdn.talk.exception.ApiMethodUserException;
 import net.ctrdn.talk.portal.api.DefaultApiMethod;
-import net.ctrdn.talk.system.SipAccountDao;
-import net.ctrdn.talk.system.SystemUserDao;
+import net.ctrdn.talk.dao.SipAccountDao;
+import net.ctrdn.talk.dao.SystemUserDao;
 import org.bson.types.ObjectId;
 
 public class SipAccountCreateMethod extends DefaultApiMethod {
-
+    
     public SipAccountCreateMethod(ProxyController proxyController) {
         super(proxyController, "telephony.sip-account.create");
     }
-
+    
     @Override
     public JsonObjectBuilder execute(ProxyController proxyController, HttpServletRequest request, HttpServletResponse response) throws ApiMethodException {
         String inUsername = request.getParameter("username");
         String inSystemAccountObjectId = request.getParameter("system-account-object-id");
         String inPassword = request.getParameter("password");
         boolean inEnabled = this.processInputBoolean(request.getParameter("enabled"));
-
+        boolean inRecordIncomingCalls = this.processInputBoolean(request.getParameter("record-incoming-calls"));
+        boolean inRecordOutgoingCalls = this.processInputBoolean(request.getParameter("record-outgoing-calls"));
+        
         if (inSystemAccountObjectId.trim().isEmpty()) {
             throw new ApiMethodUserException("System account needs to be selected.");
         }
@@ -45,16 +47,18 @@ public class SipAccountCreateMethod extends DefaultApiMethod {
         if (sipAccountDao != null) {
             throw new ApiMethodUserException("SIP Account with this username already exists.");
         }
-
+        
         sipAccountDao = DatabaseObjectFactory.getInstance().create(SipAccountDao.class);
         sipAccountDao.setSystemUserDao(systemAccountDao);
         sipAccountDao.setUsername(inUsername);
         sipAccountDao.setPlaintextPassword(inPassword);
         sipAccountDao.setCreateDate(new Date());
         sipAccountDao.setLastLoginDate(null);
+        sipAccountDao.setRecordIncomingCalls(inRecordIncomingCalls);
+        sipAccountDao.setRecordOutgoingCalls(inRecordOutgoingCalls);
         sipAccountDao.setEnabled(inEnabled);
         sipAccountDao.store();
-
+        
         JsonObjectBuilder job = Json.createObjectBuilder();
         job.add("ObjectId", sipAccountDao.getObjectId().toHexString());
         return job;

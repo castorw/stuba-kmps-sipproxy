@@ -13,7 +13,7 @@ import net.ctrdn.talk.core.common.DatabaseObjectFactory;
 import net.ctrdn.talk.exception.ApiMethodException;
 import net.ctrdn.talk.exception.ApiMethodUserException;
 import net.ctrdn.talk.portal.api.DefaultApiMethod;
-import net.ctrdn.talk.system.SystemUserDao;
+import net.ctrdn.talk.dao.SystemUserDao;
 
 public class UserCreateMethod extends DefaultApiMethod {
 

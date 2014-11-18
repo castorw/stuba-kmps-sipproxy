@@ -22,8 +22,8 @@ import net.ctrdn.talk.core.common.DatabaseObjectFactory;
 import net.ctrdn.talk.exception.TalkSipServerException;
 import net.ctrdn.talk.exception.TalkSipRegistrationException;
 import net.ctrdn.talk.exception.TalkSipSessionException;
-import net.ctrdn.talk.system.SipAccountDao;
-import net.ctrdn.talk.system.SipExtensionDao;
+import net.ctrdn.talk.dao.SipAccountDao;
+import net.ctrdn.talk.dao.SipExtensionDao;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

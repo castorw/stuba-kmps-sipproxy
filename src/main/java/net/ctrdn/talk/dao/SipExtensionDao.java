@@ -1,4 +1,4 @@
-package net.ctrdn.talk.system;
+package net.ctrdn.talk.dao;
 
 import com.mongodb.DBCollection;
 import net.ctrdn.talk.core.common.DatabaseObject;

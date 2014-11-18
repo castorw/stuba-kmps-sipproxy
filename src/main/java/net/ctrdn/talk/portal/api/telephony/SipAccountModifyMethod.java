@@ -10,7 +10,7 @@ import net.ctrdn.talk.core.common.DatabaseObjectFactory;
 import net.ctrdn.talk.exception.ApiMethodException;
 import net.ctrdn.talk.exception.ApiMethodUserException;
 import net.ctrdn.talk.portal.api.DefaultApiMethod;
-import net.ctrdn.talk.system.SipAccountDao;
+import net.ctrdn.talk.dao.SipAccountDao;
 
 public class SipAccountModifyMethod extends DefaultApiMethod {
 
@@ -23,6 +23,8 @@ public class SipAccountModifyMethod extends DefaultApiMethod {
         String inUsername = request.getParameter("username");
         String inPassword = request.getParameter("password");
         boolean inEnabled = this.processInputBoolean(request.getParameter("enabled"));
+        boolean inRecordIncomingCalls = this.processInputBoolean(request.getParameter("record-incoming-calls"));
+        boolean inRecordOutgoingCalls = this.processInputBoolean(request.getParameter("record-outgoing-calls"));
 
         SipAccountDao sipAccountDao = DatabaseObjectFactory.getInstance().find(SipAccountDao.class, new BasicDBObject("Username", inUsername));
         if (sipAccountDao == null) {
@@ -35,6 +37,8 @@ public class SipAccountModifyMethod extends DefaultApiMethod {
 
         sipAccountDao.setPlaintextPassword(inPassword);
         sipAccountDao.setEnabled(inEnabled);
+        sipAccountDao.setRecordIncomingCalls(inRecordIncomingCalls);
+        sipAccountDao.setRecordOutgoingCalls(inRecordOutgoingCalls);
         sipAccountDao.store();
 
         JsonObjectBuilder job = Json.createObjectBuilder();

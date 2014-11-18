@@ -19,7 +19,7 @@ import net.ctrdn.talk.exception.PortalAuthenticationException;
 import net.ctrdn.talk.exception.TalkException;
 import net.ctrdn.talk.portal.ApiServlet;
 import net.ctrdn.talk.portal.ResourceServlet;
-import net.ctrdn.talk.system.SystemUserDao;
+import net.ctrdn.talk.dao.SystemUserDao;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
@@ -27,9 +27,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import net.ctrdn.talk.portal.api.ApiMethodRegistry;
 import net.ctrdn.talk.sip.SipServer;
-import net.ctrdn.talk.system.SipAccountDao;
-import net.ctrdn.talk.system.SipExtensionDao;
-import net.ctrdn.talk.system.SystemUserSessionDao;
+import net.ctrdn.talk.dao.SipAccountDao;
+import net.ctrdn.talk.dao.SipExtensionDao;
+import net.ctrdn.talk.dao.SipSessionDao;
+import net.ctrdn.talk.dao.SystemUserSessionDao;
 
 public class ProxyController {
 
@@ -115,6 +116,7 @@ public class ProxyController {
         DatabaseObjectFactory.addCollectionMapping(SystemUserSessionDao.class, this.database.getCollection("core.user.session"));
         DatabaseObjectFactory.addCollectionMapping(SipAccountDao.class, this.database.getCollection("telephony.sip.account"));
         DatabaseObjectFactory.addCollectionMapping(SipExtensionDao.class, this.database.getCollection("telephony.sip.extension"));
+        DatabaseObjectFactory.addCollectionMapping(SipSessionDao.class, this.database.getCollection("telephony.sip.session"));
     }
 
     private void startWebserver() throws ConfigurationException, InitializationException {

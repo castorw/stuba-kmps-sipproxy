@@ -34,6 +34,16 @@
                 tbHtml += "<td>" + accountObj.SystemUserDisplayName + "</td>";
                 tbHtml += "<td>" + create_moment_html(accountObj.LastLoginTimestamp) + "</td>";
                 tbHtml += "<td>" + create_moment_html(accountObj.CreateTimestamp) + "</td>";
+
+                tbHtml += "<td class=\"text-center\">";
+                if (accountObj.RecordIncomingCalls) {
+                    tbHtml += "<span class=\"label label-primary\">Incoming</span> ";
+                }
+                if (accountObj.RecordOutgoingCalls) {
+                    tbHtml += "<span class=\"label label-primary\">Outgoing</span> ";
+                }
+                tbHtml += "</td>";
+
                 tbHtml += "<td class=\"text-center\">" + create_boolean_label_html(accountObj.IsOnline, "Registered", "Offline") + "</td>";
                 tbHtml += "<td class=\"text-center\">" + create_boolean_label_html(accountObj.Enabled, "Enabled", "Disabled") + "</td>";
                 tbHtml += "<td class=\"text-left\"><a class=\"label label-default\" href=\"#\" data-edit-id=\"" + i + "\"><span class=\"fa fa-pencil\"></a> ";
@@ -72,6 +82,8 @@
                 });
 
                 bootstrap_switch_set($("#md-new-account input[data-form-id='enabled']"), account_cache[account_edit_id].Enabled);
+                bootstrap_switch_set($("#md-new-account input[data-form-id='record-incoming-calls']"), account_cache[account_edit_id].RecordIncomingCalls);
+                bootstrap_switch_set($("#md-new-account input[data-form-id='record-outgoing-calls']"), account_cache[account_edit_id].RecordOutgoingCalls);
 
                 $("#md-new-account").modalEffectsDirect();
             });
@@ -133,7 +145,8 @@
                     <th>Display Name</th>
                     <th>Last Logged In</th>
                     <th>Created</th>
-                    <th>Status</th>
+                    <th>Call Recording</th>
+                    <th>Status</th>      
                     <th>Enabled</th>
                     <th></th>
                 </tr>
@@ -173,6 +186,22 @@
                     <label for="input-password" class="col-sm-4 control-label">Secret</label>
                     <div class="col-sm-8">
                         <input type="text" class="form-control" data-form-id="password" placeholder="Secret">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="col-sm-4 control-label">Record Incoming Calls</label>
+                    <div class="col-sm-8">
+                        <div class="switch switch-small has-switch">
+                            <input type="checkbox" data-form-id="record-incoming-calls">                  
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="col-sm-4 control-label">Record Outgoing Calls</label>
+                    <div class="col-sm-8">
+                        <div class="switch switch-small has-switch">
+                            <input type="checkbox" data-form-id="record-outgoing-calls">                  
+                        </div>
                     </div>
                 </div>
                 <div class="form-group">

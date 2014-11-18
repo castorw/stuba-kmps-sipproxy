@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import javax.json.Json;
+import javax.json.JsonObject;
 import javax.json.JsonObjectBuilder;
 import javax.json.JsonWriter;
 import javax.json.stream.JsonGenerator;
@@ -19,7 +20,7 @@ import net.ctrdn.talk.exception.ApiRegistryException;
 import net.ctrdn.talk.exception.PortalAuthenticationException;
 import net.ctrdn.talk.portal.api.ApiMethod;
 import net.ctrdn.talk.portal.api.ApiMethodRegistry;
-import net.ctrdn.talk.system.SystemUserSessionDao;
+import net.ctrdn.talk.dao.SystemUserSessionDao;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

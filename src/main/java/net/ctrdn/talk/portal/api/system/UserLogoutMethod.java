@@ -8,7 +8,7 @@ import javax.servlet.http.HttpServletResponse;
 import net.ctrdn.talk.core.ProxyController;
 import net.ctrdn.talk.exception.ApiMethodException;
 import net.ctrdn.talk.portal.api.DefaultApiMethod;
-import net.ctrdn.talk.system.SystemUserSessionDao;
+import net.ctrdn.talk.dao.SystemUserSessionDao;
 
 public class UserLogoutMethod extends DefaultApiMethod {
 

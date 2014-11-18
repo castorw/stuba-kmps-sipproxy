@@ -44,7 +44,7 @@ import net.ctrdn.talk.exception.ConfigurationException;
 import net.ctrdn.talk.exception.InitializationException;
 import net.ctrdn.talk.exception.TalkSipServerException;
 import net.ctrdn.talk.rtp.AlgProvider;
-import net.ctrdn.talk.system.SipExtensionDao;
+import net.ctrdn.talk.dao.SipExtensionDao;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

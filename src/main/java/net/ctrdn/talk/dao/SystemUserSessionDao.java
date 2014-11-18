@@ -1,4 +1,4 @@
-package net.ctrdn.talk.system;
+package net.ctrdn.talk.dao;
 
 import com.mongodb.DBCollection;
 import java.util.Date;

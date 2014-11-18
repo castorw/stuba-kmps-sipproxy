@@ -11,7 +11,7 @@ import net.ctrdn.talk.core.common.DatabaseSort;
 import net.ctrdn.talk.exception.ApiMethodException;
 import net.ctrdn.talk.portal.api.DefaultApiMethod;
 import net.ctrdn.talk.sip.SipRegistration;
-import net.ctrdn.talk.system.SipAccountDao;
+import net.ctrdn.talk.dao.SipAccountDao;
 
 public class SipAccountListMethod extends DefaultApiMethod {
 
@@ -32,6 +32,8 @@ public class SipAccountListMethod extends DefaultApiMethod {
             accountJob.add("Password", accountDao.getPlaintextPassword());
             accountJob.add("LastLoginTimestamp", this.processOutputTimestamp(accountDao.getLastLoginDate()));
             accountJob.add("CreateTimestamp", this.processOutputTimestamp(accountDao.getCreateDate()));
+            accountJob.add("RecordIncomingCalls", accountDao.getRecordIncomingCalls());
+            accountJob.add("RecordOutgoingCalls", accountDao.getRecordOutgoingCalls());
             accountJob.add("Enabled", accountDao.getEnabled());
             boolean online = false;
             for (SipRegistration reg : this.getProxyController().getSipServer().getSipRegistrationList()) {

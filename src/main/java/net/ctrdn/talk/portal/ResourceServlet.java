@@ -13,7 +13,7 @@ import javax.servlet.http.HttpSession;
 import net.ctrdn.talk.core.ProxyController;
 import net.ctrdn.talk.exception.PortalAuthenticationException;
 import net.ctrdn.talk.portal.menu.MenuItem;
-import net.ctrdn.talk.system.SystemUserSessionDao;
+import net.ctrdn.talk.dao.SystemUserSessionDao;
 import org.apache.commons.codec.binary.Base64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

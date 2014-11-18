@@ -8,7 +8,7 @@ import net.ctrdn.talk.core.ProxyController;
 import net.ctrdn.talk.core.common.DatabaseObjectFactory;
 import net.ctrdn.talk.exception.ApiMethodException;
 import net.ctrdn.talk.portal.api.DefaultApiMethod;
-import net.ctrdn.talk.system.SipAccountDao;
+import net.ctrdn.talk.dao.SipAccountDao;
 import org.bson.types.ObjectId;
 
 public class SipAccountDeleteMethod extends DefaultApiMethod {
