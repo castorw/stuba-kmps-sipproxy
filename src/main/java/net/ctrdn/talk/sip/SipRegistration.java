@@ -36,6 +36,7 @@ public class SipRegistration {
     private final int forcedRegistrationTimeout;
 
     // state description
+    private final List<SipExtensionDao> registeredExtensionDaoList = new ArrayList<>();
     private final List<ContactHeader> registeredContactHeaderList = new ArrayList<>();
     private String remoteHost;
     private int remotePort;
@@ -122,6 +123,7 @@ public class SipRegistration {
                         proxyUri.setUser(sed.getExtension());
                         ContactHeader contactHeader = this.getSipServer().getSipHeaderFactory().createContactHeader(this.getSipServer().getSipAddressFactory().createAddress(this.getSipAccountDao().getSystemUserDao().getDisplayName(), proxyUri));
                         this.registeredContactHeaderList.add(contactHeader);
+                        this.getRegisteredExtensionDaoList().add(sed);
                     }
 
                     this.sendResponseOk(requestEvent, true);
@@ -292,5 +294,9 @@ public class SipRegistration {
 
     public Integer getActiveExpireTime() {
         return activeExpireTime;
+    }
+
+    public List<SipExtensionDao> getRegisteredExtensionDaoList() {
+        return registeredExtensionDaoList;
     }
 }

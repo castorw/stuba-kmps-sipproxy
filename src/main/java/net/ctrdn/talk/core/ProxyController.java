@@ -43,31 +43,38 @@ public class ProxyController {
     private SipServer sipServer;
 
     public void initialize() {
+        Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+
+            @Override
+            public void uncaughtException(Thread t, Throwable e) {
+                e.printStackTrace();
+            }
+        });
         try {
-            Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-
-                @Override
-                public void uncaughtException(Thread t, Throwable e) {
-                    e.printStackTrace();
-                }
-            });
-
             this.loadConfiguration();
             this.connectDatabase();
             this.mapDatabase();
             this.initializePortalApi();
-            this.startSipServer();
             this.startWebserver();
-
             this.logger.info("Successfully initialized proxy controller");
         } catch (TalkException ex) {
             this.logger.error("Proxy controller initialization failed", ex);
+        }
+        try {
+            this.startSipServer();
+        } catch (TalkException ex) {
+            this.logger.error("Failed to start the SIP server", ex);
         }
     }
 
     private void startSipServer() throws ConfigurationException, InitializationException {
         this.sipServer = new SipServer(this);
         this.sipServer.start();
+    }
+
+    public void restartSipServer() throws TalkException {
+        this.sipServer.stop();
+        this.startSipServer();
     }
 
     private void initializePortalApi() throws InitializationException {

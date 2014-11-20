@@ -14,7 +14,6 @@ import net.ctrdn.talk.core.ProxyController;
 import net.ctrdn.talk.exception.PortalAuthenticationException;
 import net.ctrdn.talk.portal.menu.MenuItem;
 import net.ctrdn.talk.dao.SystemUserSessionDao;
-import org.apache.commons.codec.binary.Base64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -116,12 +115,11 @@ public class ResourceServlet extends HttpServlet {
         telephonyMenuItem.addSubItem(new MenuItem("SIP Accounts", "/sip-accounts.html"));
         telephonyMenuItem.addSubItem(new MenuItem("SIP Extensions", "/sip-extensions.html"));
         telephonyMenuItem.addSubItem(new MenuItem("SIP Calls", "/sip-calls.html"));
-        telephonyMenuItem.addSubItem(new MenuItem("RTP Application Layer Gateway", "/rtp-alg.html"));
         menuItemList.add(telephonyMenuItem);
 
         // System Menu
         MenuItem systemMenuItem = new MenuItem("System", null, "fa-gear");
-        systemMenuItem.addSubItem(new MenuItem("General Settings", "/system-general-settings.html"));
+        systemMenuItem.addSubItem(new MenuItem("Configuration", "/system-configuration.html"));
         systemMenuItem.addSubItem(new MenuItem("User Accounts", "/system-accounts.html"));
         menuItemList.add(systemMenuItem);
 
@@ -152,8 +150,8 @@ public class ResourceServlet extends HttpServlet {
                 title += " | RTP Application Layer Gateway";
                 break;
             }
-            case "/system-general-settings.html": {
-                title += " | General Settings";
+            case "/system-configuration.html": {
+                title += " | System Configuration";
                 break;
             }
             case "/system-accounts.html": {

@@ -1,0 +1,188 @@
+%portal_header_html%
+<script type="text/javascript">
+    $(document).ready(function() {
+        load_configuration();
+        hook_form();
+    });
+
+    function hook_form() {
+        $(".configuration-form").submit(function(event) {
+            event.preventDefault();
+            var form_data = get_form_data($(this));
+            modal_confirm("Confirm configuration changes", "Saving configuration may cause some services to restart and therefore all active session may get interrupted. Are you sure you want to continue?", "primary", function() {
+                call_talk_api_params("system.configuration.set", form_data, function(data) {
+                    if (data.UserError !== undefined) {
+                        alert(data.UserError);
+                        location.reload();
+                    } else if (data.Response.Successful === true) {
+                        load_configuration();
+                    }
+                });
+            });
+        });
+    }
+
+    function load_configuration() {
+        call_talk_api("system.configuration.get", function(data) {
+            for (var i in data.Response.SystemConfiguration) {
+                var entryObj = data.Response.SystemConfiguration[i];
+                set_field(i, entryObj);
+            }
+        });
+    }
+
+    function set_field(option_name, option_value) {
+        $("input[data-form-id='" + option_name + "']").each(function() {
+            if ($(this).parent().parent().hasClass("has-switch")) {
+                bootstrap_switch_set($(this), option_value);
+            } else {
+                $(this).val(option_value);
+            }
+        });
+        $("select[data-form-id='" + option_name + "'] option").each(function() {
+            if ($(this).val() === option_value) {
+                $(this).prop("selected", true);
+            } else {
+                $(this).prop("selected", false);
+            }
+        });
+    }
+</script>
+<div class="page-head">
+    <h2><span class="fa fa-gears"></span> System Configuration</h2>
+</div>
+<div class="row">
+    <div class="col-sm-6 col-md-6">
+        <form class="configuration-form">
+            <div class="block-flat">
+                <div class="header">
+                    <h3>SIP Server</h3>
+                </div>
+                <div class="content">
+                    <table class="no-border">
+                        <tbody class="no-border-y">
+                            <tr>
+                                <td><strong>Server Enabled</strong><br> Controls if SIP functionality is available</td>
+                                <td class="text-right">
+                                    <div class="switch switch-small has-switch">
+                                        <input type="checkbox" data-form-id="talk.sip.server.enabled">                  
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Domain</strong><br> Domain representing this SIP proxy</td>
+                                <td class="text-right">
+                                    <input type="text" class="form-control" data-form-id="talk.sip.server.domain" placeholder="sip.example.com">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Listen Host</strong><br> IP address or host on which SIP services will listen</td>
+                                <td class="text-right">
+                                    <input type="text" class="form-control" data-form-id="talk.sip.server.listen.host" placeholder="sip.example.com">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Listen Port</strong><br> Port on which SIP services will listen</td>
+                                <td class="text-right">
+                                    <input type="text" class="form-control" data-form-id="talk.sip.server.listen.port" placeholder="5060">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Transport</strong><br> Transport protocol used for SIP</td>
+                                <td class="text-right">
+                                    <select class="form-control" data-form-id="talk.sip.server.listen.transport">
+                                        <option value="udp">UDP</option>
+                                        <option value="tcp">TCP</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        </tbody> 
+                    </table>
+                </div>
+                <div class="text-right" style="padding-top: 10px;">
+                    <button type="submit" class="btn btn-primary btn-flat">Save Configuration</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+
+    <div class="col-sm-6 col-md-6">
+        <form class="configuration-form">
+            <div class="block-flat">
+                <div class="header">
+                    <h3>RTP Application Layer Gateway</h3>
+                </div>
+                <div class="content">
+                    <table class="no-border">
+                        <tbody class="no-border-y">
+                            <tr>
+                                <td><strong>Voice Server Enabled</strong><br> Controls if voice is processed by server</td>
+                                <td class="text-right">
+                                    <div class="switch switch-small has-switch">
+                                        <input type="checkbox" data-form-id="talk.rtp.alg.enabled">                  
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Listen Host</strong><br> Hostname or IP address on which will the voice server open RTP and RTCP sockets</td>
+                                <td class="text-right">
+                                    <input type="text" class="form-control" data-form-id="talk.rtp.alg.listen.host" placeholder="rtp.example.com">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Channel Timeout</strong><br> Time in seconds after which an inactive channel is closed</td>
+                                <td class="text-right">
+                                    <input type="text" class="form-control" data-form-id="talk.rtp.alg.channel.timeout" placeholder="30">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Recording Path</strong><br> Server directory in which recorded calls are stored</td>
+                                <td class="text-right">
+                                    <input type="text" class="form-control" data-form-id="talk.rtp.alg.recording.path" placeholder="/root/recordings">
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-right" style="padding-top: 10px;">
+                    <button type="submit" class="btn btn-primary btn-flat">Save Configuration</button>
+                </div>
+            </div>
+        </form>
+
+        <form class="configuration-form">
+            <div class="block-flat">
+                <div class="header">
+                    <h3>Registration</h3>
+                </div>
+                <div class="content">
+                    <table class="no-border">
+                        <tbody class="no-border-y">
+                            <tr>
+                                <td><strong>Force Timeout</strong><br> Force SIP registration timeout by overriding <b>Expire</b> header in response to registration</td>
+                                <td class="text-right">
+                                    <div class="switch switch-small has-switch">
+                                        <input type="checkbox" data-form-id="talk.sip.register.force-timeout">                  
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Timeout</strong><br> Amount of time in seconds to which to force the timeout to</td>
+                                <td class="text-right">
+                                    <input type="text" class="form-control" data-form-id="talk.sip.register.force-timeout.time" placeholder="60">
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-right" style="padding-top: 10px;">
+                    <button type="submit" class="btn btn-primary btn-flat">Save Configuration</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+%portal_footer_html%

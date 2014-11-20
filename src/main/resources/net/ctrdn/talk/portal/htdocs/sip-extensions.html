@@ -1,0 +1,196 @@
+%portal_header_html%
+<script type="text/javascript">
+    var sip_account_cache = null;
+    var sip_extension_cache = null;
+    var extension_edit_id = null;
+    $(document).ready(function() {
+        load_table();
+        load_target_options();
+        hook_form();
+    });
+
+    function load_target_options() {
+        call_talk_api("telephony.sip-account.list", function(data) {
+            var options_html = "";
+            sip_account_cache = data.Response.SipAccountList;
+            for (var i in sip_account_cache) {
+                var accountObj = sip_account_cache[i];
+                options_html += "<option value=\"SipAccount/" + accountObj.ObjectId + "\">" + accountObj.SystemUserDisplayName + " [" + accountObj.Username + "]</option>";
+            }
+            $("[data-form-id='target'] .og-sipaccount").html(options_html);
+        });
+    }
+
+    function render_target(extension_obj) {
+        if (extension_obj.TargetType === "SipAccount") {
+            return "<span class=\"fa fa-user\"></span> " + extension_obj.SystemUserDisplayName + " [" + extension_obj.SipAccountUsername + "]";
+        }
+        return "-";
+    }
+
+    function load_table() {
+        call_talk_api("telephony.sip-extension.list", function(data) {
+            sip_extension_cache = data.Response.SipExtensionList;
+
+            var tbHtml = "";
+            for (var i in sip_extension_cache) {
+                var extensionObj = sip_extension_cache[i];
+                tbHtml += "<tr>";
+                tbHtml += "<td><span class=\"fa fa-tag\"></span> " + extensionObj.Extension + "</td>";
+                tbHtml += "<td>" + render_target(extensionObj) + "</td>";
+                tbHtml += "<td>" + create_boolean_label_html(extensionObj.Primary, "Primary", "Secondary", "primary", "info") + "</td>";
+                tbHtml += "<td>" + create_boolean_label_html(extensionObj.IsOnline, "Registered", "Offline") + "</td>";
+                tbHtml += "<td>" + create_boolean_label_html(extensionObj.Enabled, "Enabled", "Disabled") + "</td>";
+                tbHtml += "<td class=\"text-left\"><a class=\"label label-default\" href=\"#\" data-edit-id=\"" + i + "\"><span class=\"fa fa-pencil\"></a> ";
+                tbHtml += "<a class=\"label label-danger\" href=\"#\" data-delete-id=\"" + i + "\"><span class=\"fa fa-trash-o\"></a>";
+                tbHtml += "</td>";
+                tbHtml += "</tr>";
+            }
+            $("#extensionTable tbody").html(tbHtml);
+
+            $("#extensionTable tbody [data-delete-id]").click(function() {
+                var id = $(this).attr("data-delete-id");
+                modal_confirm("Confirm removal", "Are you sure you want to delete the SIP extension <strong>" + sip_extension_cache[id].Extension + "</strong> ?", "danger", function() {
+                    call_talk_api_params("telephony.sip-extension.delete", {"object-id": sip_extension_cache[id].ObjectId}, function(data) {
+                        load_table();
+                        $("#md-new-extension").removeClass("md-show");
+                    });
+                });
+            });
+
+            $("#extensionTable tbody [data-edit-id]").click(function() {
+                extension_edit_id = $(this).attr("data-edit-id");
+                $("#md-new-extension .modal-header h3").html("Edit SIP Extension");
+                $("#md-new-extension input[data-form-id='extension']").prop("disabled", true);
+
+                $("#md-new-extension input[data-form-id='extension']").val(sip_extension_cache[extension_edit_id].Extension);
+                if (sip_extension_cache[extension_edit_id].TargetType === "SipAccount") {
+                    $("#md-new-extension select[data-form-id='target'] option").each(function() {
+                        $(this).prop("selected", false);
+                        if ($(this).attr("value") === sip_extension_cache[extension_edit_id].TargetType + "/" + sip_extension_cache[extension_edit_id].SipAccountObjectId) {
+                            $(this).prop("selected", true);
+                        }
+                    });
+                }
+
+                bootstrap_switch_set($("#md-new-extension input[data-form-id='enabled']"), sip_extension_cache[extension_edit_id].Enabled);
+                bootstrap_switch_set($("#md-new-extension input[data-form-id='primary']"), sip_extension_cache[extension_edit_id].Primary);
+
+                $("#md-new-extension").modalEffectsDirect();
+            });
+        });
+    }
+
+
+    function hook_form() {
+        $("#create-account-button").click(function() {
+            extension_edit_id = null;
+            clear_form($("#create-extension-form"));
+            $("#md-new-extension .modal-header h3").html("Create SIP Extension");
+            $("#md-new-extension").modalEffectsDirect();
+        });
+
+        $("#create-extension-form").submit(function(event) {
+            event.preventDefault();
+            var form_data = get_form_data($(this));
+            var form_object = $(this);
+            if (extension_edit_id === null) {
+                call_talk_api_params("telephony.sip-extension.create", form_data, function(data) {
+                    if (data.UserError !== undefined) {
+                        attach_form_alert(form_object, "alert-danger", "<strong>Error!</strong> <span>" + data.UserError + "</span>");
+                    } else {
+                        load_table();
+                        $("#md-new-extension").removeClass("md-show");
+                        clear_form($("#create-extension-form"));
+                    }
+                });
+            } else {
+                form_data["object-id"] = sip_extension_cache[extension_edit_id].ObjectId;
+                call_talk_api_params("telephony.sip-extension.modify", form_data, function(data) {
+                    if (data.UserError !== undefined) {
+                        attach_form_alert(form_object, "alert-danger", "<strong>Error!</strong> <span>" + data.UserError + "</span>");
+                    } else {
+                        load_table();
+                        $("#md-new-extension").removeClass("md-show");
+                        clear_form($("#create-extension-form"));
+                    }
+                });
+            }
+        });
+    }
+</script>
+<div class="page-head">
+    <h2><span class="fa fa-tags"></span> SIP Extensions</h2>
+</div>
+<div class="block-flat">
+    <div class="table-responsive" id="extensionTable">
+        <table class="table no-border hover">
+            <thead>
+                <tr>
+                    <th>Extension</th>
+                    <th>Target</th>
+                    <th>Primary</th>
+                    <th>Status</th>
+                    <th>Enabled</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody class="no-border-y">
+
+            </tbody>
+        </table>
+    </div>
+    <a href="#" class="btn btn-primary btn-flat" id="create-account-button"><span class="fa fa-plus"></span> Create Extension</a>
+</div>
+
+
+<div class="md-modal colored-header md-effect-7" id="md-new-extension">
+    <div class="modal-content">
+        <form id="create-extension-form" class="form-horizontal">
+            <div class="modal-header">
+                <h3>Create SIP Extension</h3>
+                <button type="button" class="close md-close" data-dismiss="modal" aria-hidden="true">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-error-placeholder" style="display: none;"></div>
+                <div class="form-group">
+                    <label for="input-username" class="col-sm-4 control-label">Extension</label>
+                    <div class="col-sm-8">
+                        <input type="text" class="form-control" data-form-id="extension" placeholder="Extension">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="input-username" class="col-sm-4 control-label">Target</label>
+                    <div class="col-sm-8">
+                        <select class="form-control" data-form-id="target">
+                            <option value="">--- Pick Extension Target ---</option>
+                            <optgroup class="og-sipaccount" label="SIP Account">
+                            </optgroup>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="col-sm-4 control-label">Primary</label>
+                    <div class="col-sm-8">
+                        <div class="switch switch-small has-switch">
+                            <input type="checkbox" data-form-id="primary">                  
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="col-sm-4 control-label">Extension Enabled</label>
+                    <div class="col-sm-8">
+                        <div class="switch switch-small has-switch">
+                            <input type="checkbox" data-form-id="enabled">                  
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default btn-flat md-close" data-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary btn-flat">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+%portal_footer_html%

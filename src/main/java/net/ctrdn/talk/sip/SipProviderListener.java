@@ -14,7 +14,6 @@ import javax.sip.header.CallIdHeader;
 import javax.sip.header.ViaHeader;
 import javax.sip.message.Request;
 import net.ctrdn.talk.core.ProxyController;
-import net.ctrdn.talk.exception.TalkSipException;
 import net.ctrdn.talk.exception.TalkSipServerException;
 import net.ctrdn.talk.exception.TalkSipRegistrationException;
 import org.slf4j.Logger;
@@ -164,5 +163,9 @@ public class SipProviderListener implements SipListener {
         } catch (TalkSipServerException ex) {
             this.logger.warn("Failed to parse incoming header", ex);
         }
+    }
+
+    public void stop() {
+        this.requestExecutorService.shutdownNow();
     }
 }

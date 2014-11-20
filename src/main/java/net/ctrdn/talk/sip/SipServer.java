@@ -103,6 +103,7 @@ public class SipServer {
     private final RegistrationWatchdog registrationWatchdog;
     private Thread registrationWatchdogThread;
     private AlgProvider rtpAlgProvider = null;
+    private boolean enabled;
 
     public SipServer(ProxyController proxyController) throws ConfigurationException, InitializationException {
         try {
@@ -136,11 +137,10 @@ public class SipServer {
 
     public void start() throws InitializationException {
         try {
-            boolean enabled = this.getProxyController().getConfiguration().getProperty("talk.sip.server.enabled").equals("true");
+            this.enabled = this.getProxyController().getConfiguration().getProperty("talk.sip.server.enabled").equals("true");
             if (enabled) {
                 if (this.proxyController.getConfiguration().getProperty("talk.rtp.alg.enabled", "true").equals("true")) {
                     this.rtpAlgProvider = new AlgProvider(this.proxyController);
-                    this.getRtpAlgProvider().setListenHostAddress(this.proxyController.getConfiguration().getProperty("talk.rtp.alg.listen.host"));
                 }
 
                 this.sipProviderListener = new SipProviderListener(this.getProxyController(), this);
@@ -150,9 +150,22 @@ public class SipServer {
                 this.registrationWatchdogThread = new Thread(this.registrationWatchdog);
                 this.registrationWatchdogThread.setName("SipRegistrationWatchdog");
                 this.registrationWatchdogThread.start();
+                this.logger.info("SIP Server has been successfully started");
             }
         } catch (InvalidArgumentException | NumberFormatException | TransportNotSupportedException | ObjectInUseException | TooManyListenersException ex) {
             throw new InitializationException("Failed to start SIP server", ex);
+        }
+    }
+
+    public void stop() {
+        if (this.enabled) {
+            this.sipProviderListener.stop();
+            if (this.rtpAlgProvider != null) {
+                this.rtpAlgProvider.stop();
+            }
+            this.registrationWatchdog.stop();
+            this.sipStack.stop();
+            this.logger.info("SIP Server has been stopped");
         }
     }
 

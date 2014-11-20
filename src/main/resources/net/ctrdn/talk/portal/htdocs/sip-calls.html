@@ -1,0 +1,132 @@
+%portal_header_html%
+<script type="text/javascript">
+    var call_cache = null;
+    $(document).ready(function() {
+        load_calls("active", 1500);
+        load_calls("history", 3000);
+    });
+
+    function load_calls(mode, refreshTime) {
+        call_talk_api_params("telephony.call.list", {"mode": mode}, function(data) {
+            call_cache = data.Response.CallList;
+            var tbhtml = "";
+            for (var i in call_cache) {
+                var callObj = call_cache[i];
+                tbhtml += "<tr>";
+                tbhtml += "<td><span class=\"fa fa-user\"></span> " + callObj.CallerDisplayName + " [" + callObj.CallerSipAccountUsername + "]</td>";
+                tbhtml += "<td><span class=\"fa fa-user\"></span> " + callObj.CalleeDisplayName + " [" + callObj.CalleeSipAccountUsername + "]</td>";
+                tbhtml += "<td>SIP</td>";
+
+                switch (callObj.Status) {
+                    case "UNKNOWN":
+                        tbhtml += "<td><span class=\"label label-default\">Unknown</span></td>";
+                        break;
+                    case "INVITED":
+                        tbhtml += "<td><span class=\"label label-info\">Invited</span></td>";
+                        break;
+                    case "ANSWERED":
+                        tbhtml += "<td><span class=\"label label-success\">Answered</span></td>";
+                        break;
+                    case "RINGING":
+                        tbhtml += "<td><span class=\"label label-primary\">Ringing</span></td>";
+                        break;
+                    case "ENDED":
+                        tbhtml += "<td><span class=\"label label-warning\">Ended</span></td>";
+                        break;
+                }
+
+                if (callObj.Duration === null) {
+                    tbhtml += "<td>-</td>";
+                } else {
+                    tbhtml += "<td>" + callObj.Duration + "ms</td>";
+                }
+
+                tbhtml += "<td>";
+                if (callObj.AlgEnabled === true) {
+                    tbhtml += "<span class=\"label label-primary\">Proxied</span>";
+                    if (callObj.AlgRecordingEnabled === true) {
+                        tbhtml += " <span class=\"label label-danger\">Recorded</span>";
+                    }
+                } else {
+                    tbhtml += "<span class=\"label label-success\">Direct</span>";
+                }
+                tbhtml += "</td>";
+
+                if (mode === "history") {
+                    tbhtml += "<td>" + callObj.EndCause + "</td>";
+                }
+
+                tbhtml += "<td>";
+                if (mode === "active") {
+                    tbhtml += "<a class = \"label label-danger\" href=\"#\" data-stop-id=\"" + i + "\"><span class=\"fa fa-cut\"></a>";
+                }
+                tbhtml += "</td>";
+
+                tbhtml += "</tr>";
+            }
+            if (mode === "active") {
+                $("#callTable tbody").html(tbhtml);
+            } else {
+                $("#callHistoryTable tbody").html(tbhtml);
+            }
+            setTimeout(function() {
+                load_calls(mode, refreshTime);
+            }, refreshTime);
+        });
+    }
+</script>
+<div class="page-head">
+    <h2><span class="fa fa-phone"></span> SIP Calls</h2>
+</div>
+<div class="block-flat">
+    <div class="header">
+        <h3>Active Calls</h3>
+    </div>
+    <div class="content">
+        <div class="table-responsive" id="callTable">
+            <table class="table no-border hover">
+                <thead>
+                    <tr>
+                        <th>Caller</th>
+                        <th>Callee</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Duration</th>
+                        <th>Voice Transport</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody class="no-border-y">
+
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<div class="block-flat">
+    <div class="header">
+        <h3>Call History</h3>
+    </div>
+    <div class="content">
+        <div class="table-responsive" id="callHistoryTable">
+            <table class="table no-border hover">
+                <thead>
+                    <tr>
+                        <th>Caller</th>
+                        <th>Callee</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Duration</th>
+                        <th>Voice Transport</th>
+                        <th>End Cause</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody class="no-border-y">
+
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+%portal_footer_html%

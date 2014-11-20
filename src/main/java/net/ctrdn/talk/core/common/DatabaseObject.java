@@ -100,7 +100,7 @@ abstract public class DatabaseObject {
             }
         }
         ObjectId targetObjectId = (ObjectId) this.databaseObject.get(fieldName);
-        return DatabaseObjectFactory.getInstance().find(type, targetObjectId);
+        return targetObjectId == null ? null : DatabaseObjectFactory.getInstance().find(type, targetObjectId);
     }
 
     protected void setDaoField(String fieldName, DatabaseObject dao) {
