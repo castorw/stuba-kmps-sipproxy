@@ -18,8 +18,8 @@
                 var callObj = call_cache[mode][i];
                 tbhtml += "<tr>";
                 tbhtml += "<td>" + create_moment_html_normal(callObj.InviteTimestamp) + "</td>";
-                tbhtml += "<td><span class=\"fa fa-user\"></span> " + callObj.CallerDisplayName + " [" + callObj.CallerSipAccountUsername + "]</td>";
-                tbhtml += "<td><span class=\"fa fa-user\"></span> " + callObj.CalleeDisplayName + " [" + callObj.CalleeSipAccountUsername + "]</td>";
+                tbhtml += "<td><span class=\"fa fa-user\"></span> " + callObj.CallerDisplayName + " [" + callObj.CallerSipAccountUsername + "]<br/><span class=\"fa fa-tag\"></span>" + callObj.CallerExtension + "</td>";
+                tbhtml += "<td><span class=\"fa fa-user\"></span> " + callObj.CalleeDisplayName + " [" + callObj.CalleeSipAccountUsername + "]<br/><span class=\"fa fa-tag\"></span>" + callObj.CalleeExtension + "</td>";
                 tbhtml += "<td>SIP</td>";
                 switch (callObj.Status) {
                     case "UNKNOWN":
@@ -75,9 +75,9 @@
             }
             if (mode === "active") {
                 $("#callTable tbody").html(tbhtml);
-                $("a[data-terminate-id]").click(function() {
+                $("#callTable tbody a[data-terminate-id]").click(function() {
                     var callObj = call_cache[mode][$(this).attr("data-terminate-id")];
-                    terminate_cal(callObj);
+                    terminate_call(callObj);
                 });
             } else {
                 $("#callHistoryTable tbody").html(tbhtml);
@@ -287,7 +287,7 @@
 </div>
 
 
-<div class="md-modal colored-header md-effect-7" id="md-call-detail">
+<div class="md-modal colored-header md-effect-1" id="md-call-detail">
     <div class="modal-content">
         <div class="modal-header">
             <h3>Session Detail</h3>

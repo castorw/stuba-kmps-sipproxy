@@ -21,10 +21,13 @@ import javax.sip.RequestEvent;
 import javax.sip.ResponseEvent;
 import javax.sip.ServerTransaction;
 import javax.sip.SipException;
+import javax.sip.header.CSeqHeader;
 import javax.sip.header.CallIdHeader;
 import javax.sip.header.ContactHeader;
 import javax.sip.header.ContentLengthHeader;
 import javax.sip.header.ContentTypeHeader;
+import javax.sip.header.FromHeader;
+import javax.sip.header.ToHeader;
 import javax.sip.header.ViaHeader;
 import javax.sip.message.Request;
 import javax.sip.message.Response;
@@ -41,7 +44,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class SipSession {
-    
+
     private final UUID internalUuid = UUID.randomUUID();
     private final Logger logger = LoggerFactory.getLogger(SipSession.class);
     private final SipSessionDao sipSessionDao;
@@ -64,9 +67,9 @@ public class SipSession {
     private Response lastRingingResponse;
     private ClientTransaction lastRingingResponseClientTransaction;
     private AlgChannel algChannel = null;
-    
+
     private SipSessionState state = SipSessionState.STARTED;
-    
+
     public SipSession(SipRegistration callerRegistration, SipRegistration calleeRegistration, SipExtensionDao calleeExtension) throws TalkSipServerException {
         this.callerRegistration = callerRegistration;
         this.calleeRegistration = calleeRegistration;
@@ -100,7 +103,7 @@ public class SipSession {
         this.sipSessionDao.setRtpAlgRecordingEnabled(false);
         this.logger.info("Opened new SIP session from {}@{} to {}@{}", callerRegistration.getSipAccountDao().getUsername(), this.sipServer.getSipDomain(), calleeRegistration.getSipAccountDao().getUsername(), this.sipServer.getSipDomain());
     }
-    
+
     public void terminate() throws TalkSipSessionException {
         try {
             if (this.state == SipSessionState.INVITED) {
@@ -118,15 +121,45 @@ public class SipSession {
                 }
             } else if (this.state == SipSessionState.ESTABLISHED) {
                 this.state = SipSessionState.ENDED;
-                Response response = this.sipServer.getSipMessageFactory().createResponse(Response.REQUEST_TERMINATED, this.lastInviteRequestEvent.getRequest());
-                this.sipServer.sendResponse(this.lastInviteRequestServerTransaction, response);
+                Request callerByeRequest = (Request) this.lastAckRequestEvent.getRequest().clone();
+                this.sipServer.attachProxyViaHeader(callerByeRequest, this.sipServer.generateBranch());
+                callerByeRequest.setMethod(Request.BYE);
+                SipUri callerByeRequestUri = (SipUri) callerByeRequest.getRequestURI();
+                callerByeRequestUri.setHost(this.callerRegistration.getRemoteHost());
+                callerByeRequestUri.setPort(this.callerRegistration.getRemotePort());
+                CSeqHeader callerByeCseqHeader = (CSeqHeader) callerByeRequest.getHeader(CSeqHeader.NAME);
+                callerByeCseqHeader.setSeqNumber(callerByeCseqHeader.getSeqNumber() + 1);
+                callerByeCseqHeader.setMethod(Request.BYE);
+                FromHeader callerByeFromHeader = (FromHeader) callerByeRequest.getHeader(FromHeader.NAME);
+                ToHeader callerByeToHeader = (ToHeader) callerByeRequest.getHeader(ToHeader.NAME);
+                String callerByeToHeaderTag = callerByeToHeader.getTag();
+                callerByeToHeader.setTag(callerByeFromHeader.getTag());
+                callerByeFromHeader.setTag(callerByeToHeaderTag);
+                this.sipServer.rewriteUserAgentHeader(callerByeRequest);
+                ClientTransaction callerByeCt = this.sipServer.getSipProvider().getNewClientTransaction(callerByeRequest);
+                this.logger.trace("Sending administrative termination BYE request to caller\n{}", callerByeRequest.toString());
+                this.lastAckRequestEvent.getDialog().sendRequest(callerByeCt);
+
+                Request calleeByeRequest = (Request) callerByeRequest.clone();
+                this.sipServer.attachProxyViaHeader(calleeByeRequest, this.sipServer.generateBranch());
+                calleeByeRequest.setMethod(Request.BYE);
+                //CSeqHeader calleeByeCseqHeader = (CSeqHeader) calleeByeRequest.getHeader(CSeqHeader.NAME);
+                //calleeByeCseqHeader.setSeqNumber(calleeByeCseqHeader.getSeqNumber());
+                SipUri calleeByeRequestUri = (SipUri) calleeByeRequest.getRequestURI();
+                calleeByeRequestUri.setHost(this.calleeRegistration.getRemoteHost());
+                calleeByeRequestUri.setPort(this.calleeRegistration.getRemotePort());
+                ClientTransaction calleeByeCt = this.sipServer.getSipProvider().getNewClientTransaction(calleeByeRequest);
+                this.logger.trace("Sending administrative termination BYE request to callee\n{}", calleeByeRequest.toString());
+                this.lastAckRequestEvent.getDialog().sendRequest(calleeByeCt);
+                this.sipSessionDao.setEndCause("Terminated by administrator");
+                this.logger.info("Session has been torn down by administrator");
             }
             this.onCommunicationProcessed();
-        } catch (ParseException | SipException | TalkSipServerException ex) {
+        } catch (ParseException | SipException | TalkSipServerException | InvalidArgumentException ex) {
             throw new TalkSipSessionException("Failed to terminate session", ex);
         }
     }
-    
+
     private void processInviteRequestSdp(Request request) throws TalkSipSessionException {
         try {
             if (this.sipServer.getRtpAlgProvider() != null) {
@@ -138,13 +171,13 @@ public class SipSession {
                 this.getSipSessionDao().setRtpAlgChannelRtpPort(this.algChannel.getRtpSocket().getLocalPort());
                 this.getSipSessionDao().setRtpAlgChannelRtcpPort(this.algChannel.getRtcpSocket().getLocalPort());
             }
-            
+
             ContentTypeHeader contentType = (ContentTypeHeader) request.getHeader(ContentTypeHeader.NAME);
             ContentLengthHeader contentLen = (ContentLengthHeader) request.getHeader(ContentLengthHeader.NAME);
-            
+
             if (contentLen.getContentLength() > 0 && contentType.getContentSubType().equals("sdp")) {
                 String charset = null;
-                
+
                 if (charset == null) {
                     charset = "UTF-8";
                 }
@@ -153,10 +186,10 @@ public class SipSession {
                 SdpFactory sdpFactory = SdpFactory.getInstance();
                 SessionDescription sessionDescription = sdpFactory.createSessionDescription(sdpContent);
                 MediaDescription md = (MediaDescription) sessionDescription.getMediaDescriptions(false).firstElement();
-                
+
                 this.getSipSessionDao().setCallerRtpPort(md.getMedia().getMediaPort());
                 this.getSipSessionDao().setCallerRtcpPort(md.getMedia().getMediaPort() + 1);
-                
+
                 if (this.algChannel != null) {
                     this.algChannel.setCallerRtpAddress(InetAddress.getByName(sessionDescription.getConnection().getAddress()));
                     this.algChannel.setCallerRtcpAddress(InetAddress.getByName(sessionDescription.getConnection().getAddress()));
@@ -165,7 +198,7 @@ public class SipSession {
                     sessionDescription.getConnection().setAddress(this.sipServer.getRtpAlgProvider().getListenHostAddress());
                     sessionDescription.getOrigin().setAddress(this.sipServer.getRtpAlgProvider().getListenHostAddress());
                     md.getMedia().setMediaPort(this.algChannel.getRtpSocket().getLocalPort());
-                    
+
                     Vector<String> mapIdVector = new Vector<>();
                     List<AttributeField> removeAttributeList = new ArrayList<>();
                     Vector<AttributeField> attributeVector = md.getAttributes(false);
@@ -196,9 +229,9 @@ public class SipSession {
                     for (AttributeField af : removeAttributeList) {
                         attributeVector.remove(af);
                     }
-                    
+
                     md.getMedia().setMediaFormats(mapIdVector);
-                    
+
                     request.setContent(sessionDescription, contentType);
                 }
             } else {
@@ -208,15 +241,15 @@ public class SipSession {
             throw new TalkSipSessionException("Failed preprocessing SDP data", ex);
         }
     }
-    
+
     private void processOkResponseSdp(Response response) throws TalkSipSessionException {
         try {
             ContentTypeHeader contentType = (ContentTypeHeader) response.getHeader(ContentTypeHeader.NAME);
             ContentLengthHeader contentLen = (ContentLengthHeader) response.getHeader(ContentLengthHeader.NAME);
-            
+
             if (contentLen.getContentLength() > 0 && contentType.getContentSubType().equals("sdp")) {
                 String charset = null;
-                
+
                 if (charset == null) {
                     charset = "UTF-8";
                 }
@@ -227,7 +260,7 @@ public class SipSession {
                 MediaDescription md = (MediaDescription) sessionDescription.getMediaDescriptions(false).firstElement();
                 this.getSipSessionDao().setCalleeRtpPort(md.getMedia().getMediaPort());
                 this.getSipSessionDao().setCalleeRtcpPort(md.getMedia().getMediaPort() + 1);
-                
+
                 if (this.algChannel != null) {
                     this.algChannel.setCalleeRtpAddress(InetAddress.getByName(sessionDescription.getConnection().getAddress()));
                     this.algChannel.setCalleeRtcpAddress(InetAddress.getByName(sessionDescription.getConnection().getAddress()));
@@ -236,7 +269,7 @@ public class SipSession {
                     sessionDescription.getConnection().setAddress(this.sipServer.getRtpAlgProvider().getListenHostAddress());
                     sessionDescription.getOrigin().setAddress(this.sipServer.getRtpAlgProvider().getListenHostAddress());
                     md.getMedia().setMediaPort(this.algChannel.getRtpSocket().getLocalPort());
-                    
+
                     Vector<String> mapIdVector = new Vector<>();
                     List<AttributeField> removeAttributeList = new ArrayList<>();
                     Vector<AttributeField> attributeVector = md.getAttributes(false);
@@ -267,9 +300,9 @@ public class SipSession {
                     for (AttributeField af : removeAttributeList) {
                         attributeVector.remove(af);
                     }
-                    
+
                     md.getMedia().setMediaFormats(mapIdVector);
-                    
+
                     response.setContent(sessionDescription, contentType);
                 }
             } else {
@@ -279,9 +312,12 @@ public class SipSession {
             throw new TalkSipSessionException("Failed preprocessing SDP data", ex);
         }
     }
-    
+
     public void sessionRequestReceived(RequestEvent requestEvent) throws TalkSipSessionException {
         try {
+            if (requestEvent.getRequest().getMethod().equals(Request.INVITE) && this.state == SipSessionState.ESTABLISHED) {
+                this.state = SipSessionState.STARTED;
+            }
             switch (this.getState()) {
                 case STARTED: {
                     if (!requestEvent.getRequest().getMethod().equals(Request.INVITE)) {
@@ -291,7 +327,7 @@ public class SipSession {
                     this.lastInviteRequestServerTransaction = this.sipServer.getServerTransaction(requestEvent);
                     this.callIdHeader = (CallIdHeader) requestEvent.getRequest().getHeader(CallIdHeader.NAME);
                     this.getSipSessionDao().setInviteDate(new Date());
-                    
+
                     Request newRequest = (Request) requestEvent.getRequest().clone();
                     try {
                         this.sipServer.rewriteFromHeader(newRequest, this.callerRegistration);
@@ -299,7 +335,7 @@ public class SipSession {
                         this.sipServer.rewriteUserAgentHeader(newRequest);
                         this.processInviteRequestSdp(newRequest);
                     } catch (TalkSipHeaderRewriteException ex) {
-                        
+
                     }
                     this.lastInviteBranch = this.sipServer.generateBranch();
                     this.sipServer.forwardRequest(this.callerRegistration, this.calleeRegistration, newRequest, this.lastInviteBranch);
@@ -384,7 +420,7 @@ public class SipSession {
             this.onCommunicationProcessed();
         }
     }
-    
+
     public void sessionResponseReceived(ResponseEvent responseEvent) throws TalkSipServerException {
         try {
             switch (this.getState()) {
@@ -430,7 +466,7 @@ public class SipSession {
                     break;
                 }
                 case ESTABLISHED: {
-                    
+
                 }
             }
             this.onCommunicationProcessed();
@@ -438,7 +474,7 @@ public class SipSession {
             throw new TalkSipServerException("Failed processing response", ex);
         }
     }
-    
+
     private void sendOkToCaller(RequestEvent requestEvent) throws ParseException, TalkSipServerException {
         try {
             Response response = this.callerRegistration.getSipServer().getSipMessageFactory().createResponse(Response.OK, requestEvent.getRequest());
@@ -447,7 +483,7 @@ public class SipSession {
             throw new TalkSipServerException("Error responding", ex);
         }
     }
-    
+
     private void sendOkToCallee(RequestEvent requestEvent) throws ParseException, TalkSipServerException {
         try {
             Response response = this.calleeRegistration.getSipServer().getSipMessageFactory().createResponse(Response.OK, requestEvent.getRequest());
@@ -456,7 +492,7 @@ public class SipSession {
             throw new TalkSipServerException("Error responding", ex);
         }
     }
-    
+
     private void sendTryingToCaller(RequestEvent requestEvent) throws ParseException, TalkSipServerException {
         try {
             Response response = this.callerRegistration.getSipServer().getSipMessageFactory().createResponse(Response.TRYING, requestEvent.getRequest());
@@ -465,7 +501,7 @@ public class SipSession {
             throw new TalkSipServerException("Error responding", ex);
         }
     }
-    
+
     private void onCommunicationProcessed() {
         if (this.state == SipSessionState.ENDED) {
             if (this.algChannel != null) {
@@ -478,35 +514,35 @@ public class SipSession {
             this.getSipSessionDao().store();
         }
     }
-    
+
     public SipRegistration getCallerRegistration() {
         return callerRegistration;
     }
-    
+
     public SipRegistration getCalleeRegistration() {
         return calleeRegistration;
     }
-    
+
     public CallIdHeader getCallIdHeader() {
         return callIdHeader;
     }
-    
+
     public SipSessionState getState() {
         return state;
     }
-    
+
     public SipSessionDao getSipSessionDao() {
         return sipSessionDao;
     }
-    
+
     public UUID getInternalUuid() {
         return internalUuid;
     }
-    
+
     public SipExtensionDao getCallerExtensionDao() {
         return callerExtensionDao;
     }
-    
+
     public SipExtensionDao getCalleeExtensionDao() {
         return calleeExtensionDao;
     }

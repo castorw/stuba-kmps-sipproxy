@@ -15,14 +15,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class AlgChannelAudioServlet extends HttpServlet {
-
+    
     private final Logger logger = LoggerFactory.getLogger(ResourceServlet.class);
     private final ProxyController proxyController;
-
+    
     public AlgChannelAudioServlet(ProxyController proxyController) {
         this.proxyController = proxyController;
     }
-
+    
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         HttpSession session = request.getSession();
@@ -50,9 +50,10 @@ public class AlgChannelAudioServlet extends HttpServlet {
             }
             FileInputStream fis = new FileInputStream(requestedFile);
             this.logger.debug("Delivering recording file " + requestedFile.getAbsolutePath());
-
+            
             response.setStatus(HttpServletResponse.SC_OK);
             response.setContentType("audio/wav");
+            response.setContentLength((int) requestedFile.length());
             byte[] buffer = new byte[4096];
             while (fis.available() > 0) {
                 int rd = fis.read(buffer, 0, buffer.length);
