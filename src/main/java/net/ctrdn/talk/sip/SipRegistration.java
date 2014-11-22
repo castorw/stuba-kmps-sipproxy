@@ -187,7 +187,7 @@ public class SipRegistration {
                             this.sipServer.sendServiceUnavailable(requestEvent);
                             this.logger.info("Caller attempted to call himself " + toHeader.getAddress().toString());
                         } else {
-                            sipSession = new SipSession(this, calleeRegistration);
+                            sipSession = new SipSession(this, calleeRegistration, extensionLookup);
                             this.sipServer.getSipSessionList().add(sipSession);
                         }
                     }

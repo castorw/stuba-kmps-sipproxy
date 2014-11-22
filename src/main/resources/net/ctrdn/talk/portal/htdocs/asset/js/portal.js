@@ -98,6 +98,13 @@ function create_moment_html(timestamp) {
     return "-";
 }
 
+function create_moment_html_normal(timestamp) {
+    if (timestamp > 0) {
+        return "<div>" + moment(timestamp / 1000, "X").format("YYYY-MM-DD hh:mm:ss") + "</div>";
+    }
+    return "-";
+}
+
 function modal_confirm(header, text, color, callback) {
     $("#confirm-md").removeClass("primary");
     $("#confirm-md").removeClass("success");

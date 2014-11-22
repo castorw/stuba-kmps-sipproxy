@@ -1,22 +1,26 @@
 %portal_header_html%
 <script type="text/javascript">
-    var call_cache = null;
+    var call_cache = [];
+    call_cache['active'] = null;
+    call_cache['history'] = null;
+    var call_detail_mode = null;
+    var call_detail_object_id = null;
+    var call_detail_update_timeout = null;
     $(document).ready(function() {
         load_calls("active", 1500);
         load_calls("history", 3000);
     });
-
     function load_calls(mode, refreshTime) {
         call_talk_api_params("telephony.call.list", {"mode": mode}, function(data) {
-            call_cache = data.Response.CallList;
+            call_cache[mode] = data.Response.CallList;
             var tbhtml = "";
-            for (var i in call_cache) {
-                var callObj = call_cache[i];
+            for (var i in call_cache[mode]) {
+                var callObj = call_cache[mode][i];
                 tbhtml += "<tr>";
+                tbhtml += "<td>" + create_moment_html_normal(callObj.InviteTimestamp) + "</td>";
                 tbhtml += "<td><span class=\"fa fa-user\"></span> " + callObj.CallerDisplayName + " [" + callObj.CallerSipAccountUsername + "]</td>";
                 tbhtml += "<td><span class=\"fa fa-user\"></span> " + callObj.CalleeDisplayName + " [" + callObj.CalleeSipAccountUsername + "]</td>";
                 tbhtml += "<td>SIP</td>";
-
                 switch (callObj.Status) {
                     case "UNKNOWN":
                         tbhtml += "<td><span class=\"label label-default\">Unknown</span></td>";
@@ -25,20 +29,23 @@
                         tbhtml += "<td><span class=\"label label-info\">Invited</span></td>";
                         break;
                     case "ANSWERED":
-                        tbhtml += "<td><span class=\"label label-success\">Answered</span></td>";
+                        tbhtml += "<td><span class=\"label label-primary\">Answered</span></td>";
                         break;
                     case "RINGING":
-                        tbhtml += "<td><span class=\"label label-primary\">Ringing</span></td>";
+                        tbhtml += "<td><span class=\"label label-warning\">Ringing</span></td>";
                         break;
                     case "ENDED":
-                        tbhtml += "<td><span class=\"label label-warning\">Ended</span></td>";
+                        tbhtml += "<td><span class=\"label label-success\">Ended</span></td>";
+                        break;
+                    case "CANCELED":
+                        tbhtml += "<td><span class=\"label label-danger\">Canceled</span></td>";
                         break;
                 }
 
                 if (callObj.Duration === null) {
                     tbhtml += "<td>-</td>";
                 } else {
-                    tbhtml += "<td>" + callObj.Duration + "ms</td>";
+                    tbhtml += "<td>" + moment.duration(callObj.Duration, "milliseconds").format('hh:mm:ss', {trim: false}) + "</td>";
                 }
 
                 tbhtml += "<td>";
@@ -51,27 +58,174 @@
                     tbhtml += "<span class=\"label label-success\">Direct</span>";
                 }
                 tbhtml += "</td>";
-
                 if (mode === "history") {
                     tbhtml += "<td>" + callObj.EndCause + "</td>";
                 }
 
                 tbhtml += "<td>";
-                if (mode === "active") {
-                    tbhtml += "<a class = \"label label-danger\" href=\"#\" data-stop-id=\"" + i + "\"><span class=\"fa fa-cut\"></a>";
+                if (callObj.CallObjectId !== undefined && callObj.CallObjectId !== null) {
+                    tbhtml += "<a class = \"label label-primary\" href=\"#\" data-detail-mode=\"" + mode + "\" data-detail-object-id=\"" + callObj.CallObjectId + "\"><span class=\"fa fa-info\"></a>";
                 }
-                tbhtml += "</td>";
+                if (mode === "active") {
+                    tbhtml += " <a class = \"label label-danger\" href=\"#\" data-terminate-id=\"" + i + "\"><span class=\"fa fa-cut\"></a>";
+                }
 
+                tbhtml += "</td>";
                 tbhtml += "</tr>";
             }
             if (mode === "active") {
                 $("#callTable tbody").html(tbhtml);
+                $("a[data-terminate-id]").click(function() {
+                    var callObj = call_cache[mode][$(this).attr("data-terminate-id")];
+                    terminate_cal(callObj);
+                });
             } else {
                 $("#callHistoryTable tbody").html(tbhtml);
+                $("#callHistoryTable tbody [data-toggle='tooltip']").tooltip();
             }
+
+            $("a[data-detail-object-id]").click(function() {
+                call_detail_object_id = $(this).attr("data-detail-object-id");
+                call_detail_mode = $(this).attr("data-detail-mode");
+                detail_update();
+                if (!$("#md-call-detail").hasClass("md-show")) {
+                    $("#md-call-detail").modalEffectsDirect();
+                }
+            });
+            $("#md-call-detail .md-close").click(function() {
+                detail_close();
+            });
             setTimeout(function() {
                 load_calls(mode, refreshTime);
             }, refreshTime);
+        });
+    }
+
+    function detail_update() {
+        $(".md-overlay").click(function(e) {
+            e.preventDefault();
+            detail_close();
+        });
+        var callObj = null;
+        for (var i in call_cache["active"]) {
+            if (call_cache["active"][i].CallObjectId === call_detail_object_id) {
+                callObj = call_cache["active"][i];
+                break;
+            }
+        }
+        if (callObj === null) {
+            for (var i in call_cache["history"]) {
+                if (call_cache["history"][i].CallObjectId === call_detail_object_id) {
+                    callObj = call_cache["history"][i];
+                    break;
+                }
+            }
+        }
+        if (callObj !== null) {
+
+            field_set_or_null($("#cd-general-internal-id "), callObj.SipSessionInternalUuid);
+            field_set_or_null($("#cd-general-caller"), "<span class=\"fa fa-user\"></span> " + callObj.CallerDisplayName + " [" + callObj.CallerSipAccountUsername + "] as <strong>" + callObj.CallerExtension + "</strong>");
+            field_set_or_null($("#cd-general-callee"), "<span class=\"fa fa-user\"></span> " + callObj.CalleeDisplayName + " [" + callObj.CalleeSipAccountUsername + "] as <strong>" + callObj.CalleeExtension + "</strong>");
+            field_set_or_null($("#cd-general-database-id "), callObj.CallObjectId);
+            field_set_or_null($("#cd-general-start-date "), create_moment_html_normal(callObj.InviteTimestamp));
+            field_set_or_null($("#cd-general-end-date "), create_moment_html_normal(callObj.EndTimestamp));
+            field_set_or_null($("#cd-general-end-reason "), callObj.EndCause);
+            var statusHtml = null;
+            switch (callObj.Status) {
+                case "UNKNOWN":
+                    statusHtml = "<span class=\"label label-default\">Unknown</span>";
+                    break;
+                case "INVITED":
+                    statusHtml = "<span class=\"label label-info\">Invited</span>";
+                    break;
+                case "ANSWERED":
+                    statusHtml = "<span class=\"label label-primary\">Answered</span>";
+                    break;
+                case "RINGING":
+                    statusHtml = "<span class=\"label label-warning\">Ringing</span>";
+                    break;
+                case "ENDED":
+                    statusHtml = "<span class=\"label label-success\">Ended</span>";
+                    break;
+                case "CANCELED":
+                    statusHtml = "<span class=\"label label-danger\">Canceled</span>";
+                    break;
+            }
+            field_set_or_null($("#cd-general-state"), statusHtml);
+            field_set_or_null($("#cd-general-duration"), moment.duration(callObj.Duration, "milliseconds").format('hh:mm:ss', {trim: false}));
+            field_set_or_null($("#cd-signal-invite "), create_moment_html_normal(callObj.InviteTimestamp));
+            field_set_or_null($("#cd-signal-ringing "), create_moment_html_normal(callObj.RingingTimestamp));
+            field_set_or_null($("#cd-signal-ok "), create_moment_html_normal(callObj.AnswerTimestamp));
+            field_set_or_null($("#cd-signal-ack "), create_moment_html_normal(callObj.AnswerAckTimestamp));
+            field_set_or_null($("#cd-signal-cancel "), create_moment_html_normal(callObj.CancelTimestamp));
+            field_set_or_null($("#cd-signal-bye "), create_moment_html_normal(callObj.ByeTimestamp));
+            var voice_routing_html = null;
+            if (callObj.AlgEnabled === true) {
+                voice_routing_html = "<span class=\"label label-primary\">Proxied</span>";
+                if (callObj.AlgRecordingEnabled === true) {
+                    voice_routing_html += " <span class=\"label label-danger\">Recorded</span>";
+                }
+            } else {
+                voice_routing_html = "<span class=\"label label-success\">Direct</span>";
+            }
+            field_set_or_null($("#cd-voice-routing"), voice_routing_html);
+            field_set_or_null($("#cd-voice-channel-uuid"), callObj.AlgChannelUuid);
+            field_set_or_null($("#cd-voice-channel-rtp"), callObj.AlgChannelRtpPort);
+            field_set_or_null($("#cd-voice-channel-rtcp"), callObj.AlgChannelRtcpPort);
+            field_set_or_null($("#cd-voice-caller-rtp"), callObj.CallerRtpPort);
+            field_set_or_null($("#cd-voice-caller-rtcp"), callObj.CallerRtcpPort);
+            field_set_or_null($("#cd-voice-callee-rtp"), callObj.CalleeRtpPort);
+            field_set_or_null($("#cd-voice-callee-rtcp"), callObj.CalleeRtcpPort);
+            if (callObj.AlgRecordingEnabled && callObj.Duration > 0 && callObj.Status === "ENDED") {
+                if ($("#cd-call-object-id").val() !== call_detail_object_id || $("#cd-voice-caller-recording").html() === "-") {
+                    $("#cd-voice-caller-recording").html("<audio controls style=\"width:100%\"><source src=\"/recording/" + callObj.AlgChannelUuid + ".caller.wav\" type=\"audio/wav\">Unsupported browser!</audio>");
+                    $("#cd-voice-callee-recording").html("<audio controls style=\"width:100%\"><source src=\"/recording/" + callObj.AlgChannelUuid + ".callee.wav\" type=\"audio/wav\">Unsupported browser!</audio>");
+                    $("#cd-voice-combined-recording").html("<audio controls style=\"width:100%\"><source src=\"/recording/" + callObj.AlgChannelUuid + ".combined.wav\" type=\"audio/wav\">Unsupported browser!</audio>");
+                }
+            } else {
+                $("#cd-voice-caller-recording").html("-");
+                $("#cd-voice-callee-recording").html("-");
+                $("#cd-voice-combined-recording").html("-");
+            }
+            $("#cd-call-object-id").val(callObj.CallObjectId);
+
+            switch (callObj.Status) {
+                case "RINGING":
+                case "ANSWERED":
+                    $("#cd-button-terminate").show();
+                    break;
+                default:
+                    $("#cd-button-terminate").hide();
+                    break;
+            }
+
+            $("#cd-button-terminate").click(function() {
+                terminate_call(callObj);
+            });
+        }
+        call_detail_update_timeout = setTimeout("detail_update();", 1000);
+    }
+
+    function detail_close() {
+        $("#md-call-detail audio").each(function() {
+            this.pause();
+        });
+        clearTimeout(call_detail_update_timeout);
+        call_detail_id = null;
+        call_detail_mode = null;
+        $("#md-call-detail").removeClass("md-show");
+    }
+
+    function field_set_or_null(obj, value) {
+        obj.html((value === null || value === undefined) ? "-" : value);
+    }
+    function terminate_call(callObj) {
+        modal_confirm("Confirm termination", "Are you sure you want to terminate call session between <strong>" + callObj.CallerDisplayName + "</strong> and <strong>" + callObj.CalleeDisplayName + "</strong>?", "warning", function() {
+            call_talk_api_params("telephony.call.terminate", {"uuid": callObj.SipSessionInternalUuid}, function(data) {
+                if (data.UserError !== undefined) {
+                    alert(data.UserError);
+                }
+            });
         });
     }
 </script>
@@ -87,6 +241,7 @@
             <table class="table no-border hover">
                 <thead>
                     <tr>
+                        <th>Start Date</th>
                         <th>Caller</th>
                         <th>Callee</th>
                         <th>Type</th>
@@ -112,6 +267,7 @@
             <table class="table no-border hover">
                 <thead>
                     <tr>
+                        <th>Start Date</th>
                         <th>Caller</th>
                         <th>Callee</th>
                         <th>Type</th>
@@ -126,6 +282,154 @@
 
                 </tbody>
             </table>
+        </div>
+    </div>
+</div>
+
+
+<div class="md-modal colored-header md-effect-7" id="md-call-detail">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Session Detail</h3>
+            <button type="button" class="close md-close" data-dismiss="modal" aria-hidden="true">×</button>
+        </div>
+        <div class="modal-body" style="background-color:  #F0F0F0;">
+            <div class="tab-container">
+                <ul class="nav nav-tabs">
+                    <li class="active"><a href="#general" data-toggle="tab">General</a></li>
+                    <li><a href="#signalling" data-toggle="tab">Signalling</a></li>
+                    <li><a href="#voice" data-toggle="tab">Voice</a></li>
+                </ul>
+                <div class="tab-content">
+                    <input type="hidden" id="cd-call-object-id" />
+                    <div class="tab-pane active fade in cont" id="general">
+                        <table class="table no-border hover">
+                            <tbody class="no-border-y">
+                                <tr>
+                                    <td><strong>Call Processing ID</strong></td>
+                                    <td><span id="cd-general-internal-id"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Call Record ID</strong></td>
+                                    <td><span id="cd-general-database-id"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Caller</strong></td>
+                                    <td><span id="cd-general-caller"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Callee</strong></td>
+                                    <td><span id="cd-general-callee"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Session Started</strong></td>
+                                    <td><span id="cd-general-start-date"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Session Ended</strong></td>
+                                    <td><span id="cd-general-end-date"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>End Reason</strong></td>
+                                    <td><span id="cd-general-end-reason"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Call State</strong></td>
+                                    <td><span id="cd-general-state"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Call Duration</strong></td>
+                                    <td><span id="cd-general-duration"></span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="tab-pane cont fade" id="signalling">
+                        <table class="table no-border hover">
+                            <tbody class="no-border-y">
+                                <tr>
+                                    <td><strong>INVITE Received</strong></td>
+                                    <td><span id="cd-signal-invite"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>RINGING Received</strong></td>
+                                    <td><span id="cd-signal-ringing"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>CANCEL Received</strong></td>
+                                    <td><span id="cd-signal-cancel"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>OK Received</strong></td>
+                                    <td><span id="cd-signal-ok"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>ACK Received</strong></td>
+                                    <td><span id="cd-signal-ack"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>BYE Received</strong></td>
+                                    <td><span id="cd-signal-bye"></span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="tab-pane fade" id="voice">
+                        <table class="table no-border hover">
+                            <tbody class="no-border-y">
+                                <tr>
+                                    <td><strong>Voice Routing</strong></td>
+                                    <td><span id="cd-voice-routing"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>ALG Channel UUID</strong></td>
+                                    <td><span id="cd-voice-channel-uuid"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>ALG Channel RTP port</strong></td>
+                                    <td><span id="cd-voice-channel-rtp"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>ALG Channel RTCP port</strong></td>
+                                    <td><span id="cd-voice-channel-rtcp"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Caller RTP Port</strong></td>
+                                    <td><span id="cd-voice-caller-rtp"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Caller RTCP Port</strong></td>
+                                    <td><span id="cd-voice-caller-rtcp"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Callee RTP Port</strong></td>
+                                    <td><span id="cd-voice-callee-rtp"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Callee RTCP Port</strong></td>
+                                    <td><span id="cd-voice-callee-rtcp"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Caller Recording</strong></td>
+                                    <td><span id="cd-voice-caller-recording"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Callee Recording</strong></td>
+                                    <td><span id="cd-voice-callee-recording"></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Combined Recording</strong></td>
+                                    <td><span id="cd-voice-combined-recording"></span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-danger btn-flat" id="cd-button-terminate"><span class="fa fa-cut"></span> Terminate Call</button>
+            <button type="button" class="btn btn-default btn-flat md-close" data-dismiss="modal">Close</button>
         </div>
     </div>
 </div>

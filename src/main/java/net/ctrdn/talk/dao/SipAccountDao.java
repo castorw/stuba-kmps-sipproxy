@@ -1,8 +1,10 @@
 package net.ctrdn.talk.dao;
 
+import com.mongodb.BasicDBObject;
 import com.mongodb.DBCollection;
 import java.util.Date;
 import net.ctrdn.talk.core.common.DatabaseObject;
+import net.ctrdn.talk.core.common.DatabaseObjectFactory;
 import net.ctrdn.talk.exception.DatabaseObjectException;
 import org.bson.types.ObjectId;
 
@@ -78,5 +80,13 @@ public class SipAccountDao extends DatabaseObject {
 
     public void setRecordOutgoingCalls(boolean recordOutgoingCalls) {
         this.setBooleanField("RecordOutgoingCalls", recordOutgoingCalls);
+    }
+
+    public SipExtensionDao getPrimaryExtension() {
+        BasicDBObject lookupReference = new BasicDBObject("TargetType", "SipAccount");
+        lookupReference.append("SipAccountObjectId", this.getObjectId());
+        lookupReference.append("Primary", true);
+        SipExtensionDao sipExtensionDao = DatabaseObjectFactory.getInstance().find(SipExtensionDao.class, lookupReference);
+        return sipExtensionDao;
     }
 }

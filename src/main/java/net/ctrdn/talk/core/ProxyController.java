@@ -31,6 +31,7 @@ import net.ctrdn.talk.dao.SipAccountDao;
 import net.ctrdn.talk.dao.SipExtensionDao;
 import net.ctrdn.talk.dao.SipSessionDao;
 import net.ctrdn.talk.dao.SystemUserSessionDao;
+import net.ctrdn.talk.portal.AlgChannelAudioServlet;
 
 public class ProxyController {
 
@@ -133,6 +134,7 @@ public class ProxyController {
             sch.setContextPath("/");
             sch.addServlet(new ServletHolder(new ApiServlet(this)), "/api/*");
             sch.addServlet(new ServletHolder(new ResourceServlet(this)), "/*");
+            sch.addServlet(new ServletHolder(new AlgChannelAudioServlet(this)), "/recording/*");
 
             Server server = new Server(Integer.parseInt(this.getConfiguration().getProperty("talk.portal.webserver.port")));
             server.setHandler(sch);

@@ -209,8 +209,8 @@ public class SipServer {
         try {
             List<String> userAgentList = new ArrayList<>();
             userAgentList.add(SipServer.USER_AGENT);
-            UserAgentHeader contactHeader = this.getSipHeaderFactory().createUserAgentHeader(userAgentList);
-            request.setHeader(contactHeader);
+            UserAgentHeader userAgentHeader = this.getSipHeaderFactory().createUserAgentHeader(userAgentList);
+            request.setHeader(userAgentHeader);
             this.logger.debug("Rewrote User-Agent header on {} request", request.getMethod());
         } catch (ParseException ex) {
             throw new TalkSipServerException("Failed to rewrite User-Agent header", ex);
@@ -221,8 +221,7 @@ public class SipServer {
         try {
             List<String> userAgentList = new ArrayList<>();
             userAgentList.add(SipServer.USER_AGENT);
-            UserAgentHeader contactHeader = this.getSipHeaderFactory().createUserAgentHeader(userAgentList);
-            response.setHeader(contactHeader);
+            response.removeHeader(UserAgentHeader.NAME);
             ServerHeader serverHeader = this.getSipHeaderFactory().createServerHeader(userAgentList);
             response.setHeader(serverHeader);
             this.logger.debug("Rewrote User-Agent header on response {} {}", response.getStatusCode(), response.getReasonPhrase());
@@ -236,7 +235,11 @@ public class SipServer {
             SipExtensionDao extensionDao = this.resolvePrimaryExtensionDao(sipRegistration);
             if (extensionDao != null) {
                 SipURI sipUri = this.getSipAddressFactory().createSipURI(extensionDao.getExtension(), this.getSipDomain());
-                sipUri.setPort(this.getSipPort());
+                if (this.getSipPort() != 5060) {
+                    sipUri.setPort(this.getSipPort());
+                } else {
+                    sipUri.removePort();
+                }
                 sipUri.setTransportParam(this.sipTransport);
                 Address address = this.getSipAddressFactory().createAddress(sipRegistration.getSipAccountDao().getSystemUserDao().getDisplayName(), sipUri);
                 ContactHeader contactHeader = this.getSipHeaderFactory().createContactHeader(address);
@@ -256,7 +259,11 @@ public class SipServer {
             SipExtensionDao extensionDao = this.resolvePrimaryExtensionDao(sipRegistration);
             if (extensionDao != null) {
                 SipURI sipUri = this.getSipAddressFactory().createSipURI(extensionDao.getExtension(), this.getSipDomain());
-                sipUri.setPort(this.getSipPort());
+                if (this.getSipPort() != 5060) {
+                    sipUri.setPort(this.getSipPort());
+                } else {
+                    sipUri.removePort();
+                }
                 sipUri.setTransportParam(this.sipTransport);
                 Address address = this.getSipAddressFactory().createAddress(sipRegistration.getSipAccountDao().getSystemUserDao().getDisplayName(), sipUri);
                 ContactHeader contactHeader = this.getSipHeaderFactory().createContactHeader(address);
@@ -277,6 +284,11 @@ public class SipServer {
             if (extensionDao != null) {
                 FromHeader fh = (FromHeader) request.getHeader(FromHeader.NAME);
                 SipUri fhSipUri = (SipUri) fh.getAddress().getURI();
+                if (this.getSipPort() != 5060) {
+                    fhSipUri.setPort(this.getSipPort());
+                } else {
+                    fhSipUri.removePort();
+                }
                 fhSipUri.setHost(this.getSipDomain());
                 fhSipUri.setUser(extensionDao.getExtension());
                 fh.getAddress().setDisplayName(sipRegistration.getSipAccountDao().getSystemUserDao().getDisplayName());
@@ -287,6 +299,32 @@ public class SipServer {
             }
         } catch (ParseException ex) {
             throw new TalkSipServerException("Failed to rewrite From header", ex);
+        }
+    }
+
+    public void rewriteToHeader(Response response, SipRegistration sipRegistration) throws TalkSipServerException {
+        try {
+            SipExtensionDao extensionDao = this.resolvePrimaryExtensionDao(sipRegistration);
+            if (extensionDao != null) {
+                ToHeader th = (ToHeader) response.getHeader(ToHeader.NAME);
+                SipUri thSipUri = (SipUri) th.getAddress().getURI();
+                thSipUri.setUser(extensionDao.getExtension());
+                thSipUri.setHost(this.getSipDomain());
+                if (this.getSipPort() != 5060) {
+                    thSipUri.setPort(this.getSipPort());
+                } else {
+                    thSipUri.removePort();
+                }
+                // th.getAddress().setDisplayName(sipRegistration.getSipAccountDao().getSystemUserDao().getDisplayName());
+                th.getAddress().setDisplayName(null);
+                th.removeParameter("tag");
+                this.logger.debug("Rewrote To header on response {} {}", response.getStatusCode(), response.getReasonPhrase());
+            } else {
+                this.logger.debug("Failed to rewrite To header on respons {} {}, no primary extension found", response.getStatusCode(), response.getReasonPhrase());
+                throw new TalkSipHeaderRewriteException("No primary extension defined");
+            }
+        } catch (ParseException ex) {
+            throw new TalkSipServerException("Failed to rewrite To header", ex);
         }
     }
 
