@@ -32,6 +32,7 @@ import net.ctrdn.talk.dao.SipExtensionDao;
 import net.ctrdn.talk.dao.SipSessionDao;
 import net.ctrdn.talk.dao.SystemUserSessionDao;
 import net.ctrdn.talk.portal.AlgChannelAudioServlet;
+import net.ctrdn.talk.webrtc.WebRtcProvider;
 
 public class ProxyController {
 
@@ -42,6 +43,7 @@ public class ProxyController {
     private DB database;
     private Properties configuration;
     private SipServer sipServer;
+    private WebRtcProvider webRtcProvider;
 
     public void initialize() {
         Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
@@ -63,9 +65,15 @@ public class ProxyController {
         }
         try {
             this.startSipServer();
+            this.startWebRtcProvider();
         } catch (TalkException ex) {
             this.logger.error("Failed to start the SIP server", ex);
         }
+    }
+
+    private void startWebRtcProvider() throws InitializationException {
+        this.webRtcProvider = new WebRtcProvider(this);
+        this.webRtcProvider.start();
     }
 
     private void startSipServer() throws ConfigurationException, InitializationException {
@@ -179,5 +187,9 @@ public class ProxyController {
 
     public SipServer getSipServer() {
         return sipServer;
+    }
+
+    public WebRtcProvider getWebRtcProvider() {
+        return webRtcProvider;
     }
 }

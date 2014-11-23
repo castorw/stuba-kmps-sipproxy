@@ -18,8 +18,8 @@
                 var callObj = call_cache[mode][i];
                 tbhtml += "<tr>";
                 tbhtml += "<td>" + create_moment_html_normal(callObj.InviteTimestamp) + "</td>";
-                tbhtml += "<td><span class=\"fa fa-user\"></span> " + callObj.CallerDisplayName + " [" + callObj.CallerSipAccountUsername + "]<br/><span class=\"fa fa-tag\"></span>" + callObj.CallerExtension + "</td>";
-                tbhtml += "<td><span class=\"fa fa-user\"></span> " + callObj.CalleeDisplayName + " [" + callObj.CalleeSipAccountUsername + "]<br/><span class=\"fa fa-tag\"></span>" + callObj.CalleeExtension + "</td>";
+                tbhtml += "<td><span class=\"fa fa-user\"></span> " + callObj.CallerDisplayName + "<br/><span class=\"fa fa-tag\"></span>" + callObj.CallerExtension + "</td>";
+                tbhtml += "<td><span class=\"fa fa-user\"></span> " + callObj.CalleeDisplayName + " <br/><span class=\"fa fa-tag\"></span> " + callObj.CalleeExtension + "</td>";
                 tbhtml += "<td>SIP</td>";
                 switch (callObj.Status) {
                     case "UNKNOWN":

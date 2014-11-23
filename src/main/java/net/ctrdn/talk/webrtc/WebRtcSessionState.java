@@ -1,0 +1,15 @@
+package net.ctrdn.talk.webrtc;
+
+public enum WebRtcSessionState {
+
+    STARTED,
+    OFFERED,
+    OFFER_DELIVERED,
+    ANSWERED,
+    ANSWER_DELIVERED,
+    CALLER_CANDIDATE,
+    CALLER_CANDIDATE_DELIVERED,
+    CALLEE_CANDIDATE,
+    CALLEE_CANDIDATE_DELIVERED,
+    ESTABLISHED
+}

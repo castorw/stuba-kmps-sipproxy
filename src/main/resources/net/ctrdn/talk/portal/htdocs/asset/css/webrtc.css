@@ -1,0 +1,15 @@
+.session-primary {
+    background-color: #7761a7 !important;
+}
+.session-success {
+    background-color: #19b698 !important;
+}
+.session-info {
+    background-color: #4aa3df !important;
+}
+.session-warning {
+    background-color: #fed16c !important;
+}
+.session-danger {
+    background-color: #ea6153 !important;
+}

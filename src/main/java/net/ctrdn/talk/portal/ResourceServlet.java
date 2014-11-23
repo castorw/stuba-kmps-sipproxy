@@ -109,6 +109,7 @@ public class ResourceServlet extends HttpServlet {
 
         // Dashboard Menu Item
         menuItemList.add(new MenuItem("Dashboard", "/dashboard.html", "fa-dashboard"));
+        menuItemList.add(new MenuItem("WebRTC Client", "/webrtc-client.html", "fa-comments-o", true));
 
         // Telephony Menu
         MenuItem telephonyMenuItem = new MenuItem("Telephony", null, "fa-phone");
@@ -156,6 +157,10 @@ public class ResourceServlet extends HttpServlet {
             }
             case "/system-accounts.html": {
                 title += " | System User Accounts";
+                break;
+            }
+            case "/webrtc-client.html": {
+                title += " | WebRTC Client";
                 break;
             }
             default: {

@@ -8,12 +8,18 @@ public class MenuItem {
     private final String title;
     private final String icon;
     private final String url;
+    private final boolean targetBlank;
     private final List<MenuItem> subItemList = new ArrayList<>();
 
-    public MenuItem(String title, String url, String icon) {
+    public MenuItem(String title, String url, String icon, boolean targetBlank) {
         this.title = title;
         this.url = url;
         this.icon = icon;
+        this.targetBlank = targetBlank;
+    }
+
+    public MenuItem(String title, String url, String icon) {
+        this(title, url, icon, false);
     }
 
     public MenuItem(String title, String url) {
@@ -53,7 +59,7 @@ public class MenuItem {
             html += "</ul></a>";
         } else {
             html += "<li class=\"" + activeHtml + "\">";
-            html += "<a href=\"" + this.getUrl() + "\">";
+            html += "<a href=\"" + this.getUrl() + "\"" + ((this.targetBlank) ? "target=\"_blank\"" : "") + ">";
             if (this.getIcon() != null) {
                 html += "<i class=\"fa " + this.getIcon() + "\"></i> ";
             }
@@ -66,7 +72,7 @@ public class MenuItem {
     private String toSubmenuHtmlString(String currentUrl) {
         String activeHtml = (currentUrl.equals(this.getUrl())) ? " class=\"active\"" : "";
         String html = "<li" + activeHtml + ">";
-        html += "<a href=\"" + this.getUrl() + "\">" + this.getTitle() + "</a>";
+        html += "<a href=\"" + this.getUrl() + "\"" + ((this.targetBlank) ? "target=\"_blank\"" : "") + ">" + this.getTitle() + "</a>";
         html += "</li>";
         return html;
     }
