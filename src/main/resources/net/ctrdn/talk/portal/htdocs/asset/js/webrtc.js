@@ -129,6 +129,7 @@ function initialize_local_media() {
         var getUserMedia = Modernizr.prefixed('getUserMedia', navigator);
         var errorCallback = function(e) {
             alert("Failed to acquire user media: " + e);
+            console.log(e);
             location.href = "/";
         };
         getUserMedia(webrtcConstraints, function(stream) {
@@ -245,8 +246,15 @@ function webrtc_create_ice_candidate(init) {
 }
 
 function webrtc_create_peer_connection() {
+    var ccfg = {
+        'iceServers': [
+            {
+                'url': 'stun:stun.l.google.com:19302'
+            }
+        ]
+    };
     local_ice_candidate = null;
-    peer_connection = (typeof webkitRTCPeerConnection === "undefined") ? new mozRTCPeerConnection(null) : new webkitRTCPeerConnection(null);
+    peer_connection = (typeof webkitRTCPeerConnection === "undefined") ? new mozRTCPeerConnection(ccfg) : new webkitRTCPeerConnection(ccfg);
     peer_connection.addStream(local_media_stream);
     peer_connection.onicecandidate = function(event) {
         if (local_ice_candidate === null) {
