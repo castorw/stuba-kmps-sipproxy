@@ -28,6 +28,8 @@ public class GetConfigurationMethod extends DefaultApiMethod {
         this.addEntry(configDao, "talk.rtp.alg.listen.host", "0.0.0.0");
         this.addEntry(configDao, "talk.rtp.alg.channel.timeout", "30");
         this.addEntry(configDao, "talk.rtp.alg.recording.path", "/tmp");
+        this.addEntry(configDao, "talk.rtp.alg.nat.enabled", "false");
+        this.addEntry(configDao, "talk.rtp.alg.nat.host", "0.0.0.0");
 
         JsonObjectBuilder responseJob = Json.createObjectBuilder();
         responseJob.add("SystemConfiguration", configDao);

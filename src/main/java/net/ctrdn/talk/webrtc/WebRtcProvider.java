@@ -36,6 +36,9 @@ public class WebRtcProvider {
                         if (currentDate.getTime() - session.getLastUpdateDate().getTime() > provider.getSessionTimeout() && session.getState() != WebRtcSessionState.ESTABLISHED) {
                             provider.getSessionList().remove(session);
                             provider.logger.info("WebRTC session between {} and {} has timed out in state {}", session.getCallerDao().getDisplayName(), session.getCalleeDao().getDisplayName(), session.getState());
+                        } else if (session.getState() == WebRtcSessionState.TERMINATED && session.isCallerTerminatedDelivered() && session.isCalleeTerminatedDelivered()) {
+                            provider.getSessionList().remove(session);
+                            provider.logger.info("WebRTC session between {} and {} has been gracefully terminated", session.getCallerDao().getDisplayName(), session.getCalleeDao().getDisplayName());
                         }
                     }
                     Thread.sleep(1000);

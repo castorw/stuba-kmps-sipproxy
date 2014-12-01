@@ -22,6 +22,8 @@ public class WebRtcSession {
     private Date lastCalleeAcknowledge = new Date();
     private boolean callerEstablished = false;
     private boolean calleeEstablished = false;
+    private boolean callerTerminatedDelivered = false;
+    private boolean calleeTerminatedDelivered = false;
 
     protected WebRtcSession(SystemUserDao callerDao, SystemUserDao calleeDao) {
         this.callerDao = callerDao;
@@ -90,10 +92,33 @@ public class WebRtcSession {
     }
 
     public void callerAcknowledge() {
-        this.lastUpdateDate = new Date();
+        if (this.lastCalleeAcknowledge.getTime() > this.lastCallerAcknowledge.getTime()) {
+            this.lastUpdateDate = new Date();
+        }
+        this.lastCallerAcknowledge = new Date();
     }
 
     public void calleeAcknowledge() {
+        if (this.lastCallerAcknowledge.getTime() > this.lastCallerAcknowledge.getTime()) {
+            this.lastUpdateDate = new Date();
+        }
+        this.lastCalleeAcknowledge = new Date();
+    }
+
+    public void terminate() {
+        this.setState(WebRtcSessionState.TERMINATED);
+        this.callerTerminatedDelivered = false;
+        this.calleeTerminatedDelivered = false;
+        this.lastUpdateDate = new Date();
+    }
+
+    public void callerTerminatedDelivered() {
+        this.callerTerminatedDelivered = true;
+        this.lastUpdateDate = new Date();
+    }
+
+    public void calleeTerminatedDelivered() {
+        this.calleeTerminatedDelivered = true;
         this.lastUpdateDate = new Date();
     }
 
@@ -136,5 +161,13 @@ public class WebRtcSession {
 
     public String getCalleeCandidateBase64() {
         return calleeCandidateBase64;
+    }
+
+    public boolean isCallerTerminatedDelivered() {
+        return callerTerminatedDelivered;
+    }
+
+    public boolean isCalleeTerminatedDelivered() {
+        return calleeTerminatedDelivered;
     }
 }

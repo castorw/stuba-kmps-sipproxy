@@ -18,14 +18,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class ResourceServlet extends HttpServlet {
-
+    
     private final Logger logger = LoggerFactory.getLogger(ResourceServlet.class);
     private final ProxyController proxyController;
-
+    
     public ResourceServlet(ProxyController proxyController) {
         this.proxyController = proxyController;
     }
-
+    
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         HttpSession session = request.getSession();
@@ -34,7 +34,7 @@ public class ResourceServlet extends HttpServlet {
             if (requestUrl.equals("/")) {
                 requestUrl = "/dashboard.html";
             }
-
+            
             String requestFileName = "/net/ctrdn/talk/portal/htdocs" + requestUrl;
             InputStream is = getClass().getResourceAsStream(requestFileName);
             if (is != null) {
@@ -56,6 +56,8 @@ public class ResourceServlet extends HttpServlet {
                     response.setContentType("application/x-font-ttf");
                 } else if (fileNameLc.endsWith(".woff")) {
                     response.setContentType("application/x-font-woff");
+                } else if (fileNameLc.endsWith(".mp3")) {
+                    response.setContentType("audio/mpeg");
                 } else {
                     throw new ServletException("Unknown file type");
                 }
@@ -90,7 +92,7 @@ public class ResourceServlet extends HttpServlet {
             response.sendRedirect("/login.html");
         }
     }
-
+    
     private byte[] preprocess(InputStream is, String requestUrl) throws IOException, ServletException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         byte[] buffer = new byte[1024];
@@ -103,7 +105,7 @@ public class ResourceServlet extends HttpServlet {
         htmlString = htmlString.replaceAll("%portal_footer_html%", this.getTemplate("/footer.tpl.html"));
         return htmlString.getBytes("UTF-8");
     }
-
+    
     private String preprocessHeader(String requestUrl) throws IOException, ServletException {
         List<MenuItem> menuItemList = new ArrayList<>();
 
@@ -130,9 +132,9 @@ public class ResourceServlet extends HttpServlet {
         for (MenuItem mi : menuItemList) {
             mainMenuHtml += mi.toHtmlString(requestUrl);
         }
-
+        
         String headerTemplate = this.getTemplate("/header.tpl.html");
-
+        
         String title = "Talk";
         switch (requestUrl) {
             case "/dashboard.html": {
@@ -167,12 +169,12 @@ public class ResourceServlet extends HttpServlet {
                 title += "";
             }
         }
-
+        
         headerTemplate = headerTemplate.replaceAll("%site_title%", title);
         headerTemplate = headerTemplate.replaceAll("%main_menu_html%", mainMenuHtml);
         return headerTemplate;
     }
-
+    
     private String getTemplate(String path) throws IOException, ServletException {
         String requestFileName = "/net/ctrdn/talk/portal/htdocs" + path;
         ByteArrayOutputStream baos = new ByteArrayOutputStream();

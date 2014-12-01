@@ -131,6 +131,20 @@
                                 </td>
                             </tr>
                             <tr>
+                                <td><strong>NAT Enabled</strong><br> Enabled if this server is behind NAT</td>
+                                <td class="text-right">
+                                    <div class="switch switch-small has-switch">
+                                        <input type="checkbox" data-form-id="talk.rtp.alg.nat.enabled">                  
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>NAT Host</strong><br> Host address accessible by hosts, if this server is behind NAT</td>
+                                <td class="text-right">
+                                    <input type="text" class="form-control" data-form-id="talk.rtp.alg.nat.host" placeholder="rtp.example.com">
+                                </td>
+                            </tr>
+                            <tr>
                                 <td><strong>Channel Timeout</strong><br> Time in seconds after which an inactive channel is closed</td>
                                 <td class="text-right">
                                     <input type="text" class="form-control" data-form-id="talk.rtp.alg.channel.timeout" placeholder="30">

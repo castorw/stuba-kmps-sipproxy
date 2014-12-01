@@ -195,8 +195,8 @@ public class SipSession {
                     this.algChannel.setCallerRtcpAddress(InetAddress.getByName(sessionDescription.getConnection().getAddress()));
                     this.algChannel.setCallerRtpPort(md.getMedia().getMediaPort());
                     this.algChannel.setCallerRtcpPort(md.getMedia().getMediaPort() + 1);
-                    sessionDescription.getConnection().setAddress(this.sipServer.getRtpAlgProvider().getListenHostAddress());
-                    sessionDescription.getOrigin().setAddress(this.sipServer.getRtpAlgProvider().getListenHostAddress());
+                    sessionDescription.getConnection().setAddress(this.sipServer.getRtpAlgProvider().getAccessibleHostAddress());
+                    sessionDescription.getOrigin().setAddress(this.sipServer.getRtpAlgProvider().getAccessibleHostAddress());
                     md.getMedia().setMediaPort(this.algChannel.getRtpSocket().getLocalPort());
 
                     Vector<String> mapIdVector = new Vector<>();
@@ -214,16 +214,17 @@ public class SipSession {
                                 }
                             }
                         }
-                        if (matchingAttributeField != null) {
-                            try {
+                        try {
+                            if (matchingAttributeField != null) {
                                 this.algChannel.mapRtpProtocol(matchingAttributeField.getValue());
                                 mapIdVector.add(protocolId);
-                            } catch (RtpProtocolUnsupportedException ex) {
-                                this.logger.trace("Unsupported RTP protocol " + matchingAttributeField.getValue() + " is being removed from invite request");
-                                removeAttributeList.add(matchingAttributeField);
+                            } else if (protocolId.equals("0") || protocolId.equals("8")) {
+                                this.algChannel.mapRtpProtocol(protocolId);
+                                mapIdVector.add(protocolId);
                             }
-                        } else if (protocolId.equals("0") || protocolId.equals("8")) {
-                            mapIdVector.add(protocolId);
+                        } catch (RtpProtocolUnsupportedException ex) {
+                            this.logger.trace("Unsupported RTP protocol " + matchingAttributeField.getValue() + " is being removed from ok response");
+                            removeAttributeList.add(matchingAttributeField);
                         }
                     }
                     for (AttributeField af : removeAttributeList) {
@@ -266,8 +267,8 @@ public class SipSession {
                     this.algChannel.setCalleeRtcpAddress(InetAddress.getByName(sessionDescription.getConnection().getAddress()));
                     this.algChannel.setCalleeRtpPort(md.getMedia().getMediaPort());
                     this.algChannel.setCalleeRtcpPort(md.getMedia().getMediaPort() + 1);
-                    sessionDescription.getConnection().setAddress(this.sipServer.getRtpAlgProvider().getListenHostAddress());
-                    sessionDescription.getOrigin().setAddress(this.sipServer.getRtpAlgProvider().getListenHostAddress());
+                    sessionDescription.getConnection().setAddress(this.sipServer.getRtpAlgProvider().getAccessibleHostAddress());
+                    sessionDescription.getOrigin().setAddress(this.sipServer.getRtpAlgProvider().getAccessibleHostAddress());
                     md.getMedia().setMediaPort(this.algChannel.getRtpSocket().getLocalPort());
 
                     Vector<String> mapIdVector = new Vector<>();
@@ -285,16 +286,17 @@ public class SipSession {
                                 }
                             }
                         }
-                        if (matchingAttributeField != null) {
-                            try {
+                        try {
+                            if (matchingAttributeField != null) {
                                 this.algChannel.mapRtpProtocol(matchingAttributeField.getValue());
                                 mapIdVector.add(protocolId);
-                            } catch (RtpProtocolUnsupportedException ex) {
-                                this.logger.trace("Unsupported RTP protocol " + matchingAttributeField.getValue() + " is being removed from ok response");
-                                removeAttributeList.add(matchingAttributeField);
+                            } else if (protocolId.equals("0") || protocolId.equals("8")) {
+                                this.algChannel.mapRtpProtocol(protocolId);
+                                mapIdVector.add(protocolId);
                             }
-                        } else if (protocolId.equals("0") || protocolId.equals("8")) {
-                            mapIdVector.add(protocolId);
+                        } catch (RtpProtocolUnsupportedException ex) {
+                            this.logger.trace("Unsupported RTP protocol " + matchingAttributeField.getValue() + " is being removed from ok response");
+                            removeAttributeList.add(matchingAttributeField);
                         }
                     }
                     for (AttributeField af : removeAttributeList) {

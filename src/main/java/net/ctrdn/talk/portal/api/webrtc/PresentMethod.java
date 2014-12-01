@@ -78,6 +78,8 @@ public class PresentMethod extends DefaultApiMethod {
                 } else if (session.getState() == WebRtcSessionState.CALLEE_CANDIDATE) {
                     session.calleeCandidateDelivered();
                     sessionInfoJob.add("CandidateBase64", session.getCalleeCandidateBase64());
+                } else if (session.getState() == WebRtcSessionState.TERMINATED) {
+                    session.calleeTerminatedDelivered();
                 }
             } else if (session.getCalleeDao().getObjectId().equals(userDao.getObjectId())) {
                 sessionInfoJob = Json.createObjectBuilder();
@@ -88,6 +90,8 @@ public class PresentMethod extends DefaultApiMethod {
                 } else if (session.getState() == WebRtcSessionState.CALLER_CANDIDATE) {
                     session.callerCandidateDelivered();
                     sessionInfoJob.add("CandidateBase64", session.getCallerCandidateBase64());
+                } else if (session.getState() == WebRtcSessionState.TERMINATED) {
+                    session.callerTerminatedDelivered();
                 }
             }
             if (sessionInfoJob != null) {

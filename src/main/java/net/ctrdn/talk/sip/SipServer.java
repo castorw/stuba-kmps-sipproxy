@@ -31,6 +31,7 @@ import javax.sip.header.CSeqHeader;
 import javax.sip.header.ContactHeader;
 import javax.sip.header.FromHeader;
 import javax.sip.header.HeaderFactory;
+import javax.sip.header.MaxForwardsHeader;
 import javax.sip.header.ServerHeader;
 import javax.sip.header.ToHeader;
 import javax.sip.header.UserAgentHeader;
@@ -176,6 +177,15 @@ public class SipServer {
     public void sendResponse(ServerTransaction st, Response response) throws TalkSipServerException {
         try {
             this.logger.trace("Sending stateful SIP response using pre-set server transaction\n" + response.toString());
+
+            if (response.getHeader(MaxForwardsHeader.NAME) != null) {
+                MaxForwardsHeader mfh = (MaxForwardsHeader) response.getHeader(MaxForwardsHeader.NAME);
+                mfh.setMaxForwards(mfh.getMaxForwards() - 1);
+            } else {
+                MaxForwardsHeader mfh = this.getSipHeaderFactory().createMaxForwardsHeader(70);
+                response.addHeader(mfh);
+            }
+
             st.sendResponse(response);
         } catch (SipException | InvalidArgumentException ex) {
             throw new TalkSipServerException("Failed to send response", ex);
@@ -189,6 +199,15 @@ public class SipServer {
                 st = this.sipProvider.getNewServerTransaction(requestEvent.getRequest());
             }
             this.logger.trace("Sending stateful SIP response\n" + response.toString());
+
+            if (response.getHeader(MaxForwardsHeader.NAME) != null) {
+                MaxForwardsHeader mfh = (MaxForwardsHeader) response.getHeader(MaxForwardsHeader.NAME);
+                mfh.setMaxForwards(mfh.getMaxForwards() - 1);
+            } else {
+                MaxForwardsHeader mfh = this.getSipHeaderFactory().createMaxForwardsHeader(70);
+                response.addHeader(mfh);
+            }
+
             st.sendResponse(response);
         } catch (SipException | InvalidArgumentException ex) {
             throw new TalkSipServerException("Failed to send response", ex);
@@ -365,6 +384,15 @@ public class SipServer {
         try {
             Request ackRequest = transaction.getDialog().createAck(((CSeqHeader) response.getHeader(CSeqHeader.NAME)).getSeqNumber());
             this.logger.trace("Forwarding ACK request\n{}", ackRequest.toString());
+
+            if (ackRequest.getHeader(MaxForwardsHeader.NAME) != null) {
+                MaxForwardsHeader mfh = (MaxForwardsHeader) ackRequest.getHeader(MaxForwardsHeader.NAME);
+                mfh.setMaxForwards(mfh.getMaxForwards() - 1);
+            } else {
+                MaxForwardsHeader mfh = this.getSipHeaderFactory().createMaxForwardsHeader(70);
+                ackRequest.addHeader(mfh);
+            }
+
             transaction.getDialog().sendAck(ackRequest);
         } catch (InvalidArgumentException | SipException ex) {
             throw new TalkSipServerException("Failed to forward ACK", ex);
@@ -391,10 +419,18 @@ public class SipServer {
 
             this.logger.trace("Statefully forwarding SIP request from {}@{} to {}@{}\n{}", sourceRegistration.getSipAccountDao().getUsername(), this.getSipDomain(), targetRegistration.getSipAccountDao().getUsername(), this.getSipDomain(), request.toString());
 
+            if (request.getHeader(MaxForwardsHeader.NAME) != null) {
+                MaxForwardsHeader mfh = (MaxForwardsHeader) request.getHeader(MaxForwardsHeader.NAME);
+                mfh.setMaxForwards(mfh.getMaxForwards() - 1);
+            } else {
+                MaxForwardsHeader mfh = this.getSipHeaderFactory().createMaxForwardsHeader(70);
+                request.addHeader(mfh);
+            }
+
             ClientTransaction ct = this.sipProvider.getNewClientTransaction(request);
             ct.getDialog();
             ct.sendRequest();
-        } catch (ParseException | SipException ex) {
+        } catch (ParseException | SipException | InvalidArgumentException ex) {
             throw new TalkSipServerException("Failed to prepare request forward", ex);
         }
     }

@@ -7,6 +7,7 @@ var webrtcConstraints = {
     },
     audio: true
 };
+var ringtone_playing = false;
 var present_user_cache = null;
 var current_session = null;
 var local_ice_candidate = null;
@@ -57,6 +58,20 @@ function initialize_gui() {
             alert("You cannot open a new session until there is an ongoing session.");
         }
     });
+    $(document).on("click", ".terminate-call-button", function() {
+        if (current_session !== null && current_session.SessionInfo.State === "ESTABLISHED") {
+            var terminate_call_params = {"session-uuid": current_session.SessionInfo.SessionUuid};
+            call_talk_api_params("webrtc.terminate", terminate_call_params, function(data) {
+                if (data.UserError !== undefined) {
+                    alert(data.UserError);
+                } else {
+                    process_session_info(data.Response);
+                }
+            });
+        } else {
+            alert("No call to terminate");
+        }
+    });
 }
 
 function gui_render_user_list() {
@@ -71,6 +86,9 @@ function gui_render_user_list() {
                 userListHtml += "<h5 class=\"list-group-item-heading\"><span class=\"fa fa-phone\"></span> " + userObj.DisplayName + "</h5>";
                 userListHtml += "<div><i class=\"fa fa-" + current_session.StatusIcon + "\"></i> " + current_session.StatusText + "</div>";
                 userListHtml += "</a>";
+                if (current_session.SessionInfo.State === "ESTABLISHED") {
+                    userListHtml += "<a class=\"list-group-item terminate-call-button\" href=\"#\"><span class=\"fa fa-cut\"></span> Terminate Call</a></div>";
+                }
             } else {
                 userListHtml += "<a href=\"#\" class=\"list-group-item\" data-call-object-id=\"" + userObj.ObjectId + "\">";
                 userListHtml += "<h5 class=\"list-group-item-heading\"><span class=\"fa fa-phone\"></span> " + userObj.DisplayName + "</h5>";
@@ -106,6 +124,7 @@ function initialize_user_media_position() {
 }
 
 function initialize_local_media() {
+    $("#small-video").prop("muted", true);
     if (Modernizr.getusermedia) {
         var getUserMedia = Modernizr.prefixed('getUserMedia', navigator);
         var errorCallback = function(e) {
@@ -246,12 +265,24 @@ function webrtc_create_peer_connection() {
     };
 }
 
+function webrtc_stop() {
+    peer_connection.close();
+    peer_connection = null;
+    $("#large-video").fadeOut(500);
+    setTimeout(function() {
+        $("#gui-camera-icon").fadeIn(500);
+    }, 500);
+}
+
 function process_session_info(response) {
     if (current_session === null) {
         current_session = {};
     } else if (response.SessionInfo === undefined) {
         current_session = null;
         return;
+    }
+    if (current_session === null) {
+        ringtone_stop();
     }
     var session_info = response.SessionInfo;
     if (session_info.OfferBase64 !== undefined) {
@@ -283,6 +314,12 @@ function process_session_info(response) {
                 current_session.StatusIcon = "check";
                 current_session.StatusColor = "success";
                 break;
+            case "TERMINATED":
+                current_session.StatusText = "Ended";
+                current_session.StatusIcon = "cut";
+                current_session.StatusColor = "danger";
+                this.webrtc_stop();
+                break;
             default:
                 current_session.StatusText = "Connecting...";
                 current_session.StatusIcon = "cloud";
@@ -296,18 +333,42 @@ function process_session_info(response) {
                 current_session.StatusText = "Incoming call...";
                 current_session.StatusIcon = "bell";
                 current_session.StatusColor = "danger";
+                ringtone_start();
                 break;
             case "ESTABLISHED":
                 current_session.StatusText = "Established";
                 current_session.StatusIcon = "check";
                 current_session.StatusColor = "success";
+                ringtone_stop();
+                break;
+            case "TERMINATED":
+                current_session.StatusText = "Ended";
+                current_session.StatusIcon = "cut";
+                current_session.StatusColor = "danger";
+                this.webrtc_stop();
                 break;
             default:
                 current_session.StatusText = "Connecting...";
                 current_session.StatusIcon = "cloud";
                 current_session.StatusColor = "primary";
+                ringtone_stop();
                 break;
         }
     }
     gui_render_user_list();
+}
+
+function ringtone_start() {
+    if (!ringtone_playing) {
+        document.getElementById("ringtone-audio").play();
+        ringtone_playing = true;
+    }
+}
+
+function ringtone_stop() {
+    if (ringtone_playing) {
+        document.getElementById("ringtone-audio").pause();
+        document.getElementById("ringtone-audio").currentTime = 0;
+        ringtone_playing = false;
+    }
 }
