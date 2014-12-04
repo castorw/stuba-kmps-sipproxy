@@ -18,6 +18,7 @@ import javax.sip.header.ContactHeader;
 import javax.sip.header.FromHeader;
 import javax.sip.header.ProxyAuthorizationHeader;
 import javax.sip.header.ToHeader;
+import javax.sip.header.ViaHeader;
 import javax.sip.message.Response;
 import net.ctrdn.talk.core.common.DatabaseObjectFactory;
 import net.ctrdn.talk.exception.TalkSipServerException;
@@ -148,6 +149,12 @@ public class SipRegistration {
                     } else {
                         this.activeExpireTime = rxExpireTime;
                     }
+
+                    // update ip and port
+                    ViaHeader viaHeader = (ViaHeader) requestEvent.getRequest().getHeader(ViaHeader.NAME);
+                    this.remoteHost = viaHeader.getHost();
+                    this.remotePort = (viaHeader.getPort() == -1) ? 5060 : viaHeader.getPort();
+
                     this.sendResponseOk(requestEvent, true);
                     this.logger.debug("Updated contact list for  " + this.getSipAccountDao().getUsername() + "@" + this.getSipServer().getSipDomain() + " at " + this.getRemoteHost() + ":" + this.getRemotePort());
                     break;
