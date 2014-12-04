@@ -500,6 +500,15 @@ public class SipServer {
         return null;
     }
 
+    public SipRegistration getSipRegistration(String username) {
+        for (SipRegistration session : this.getSipRegistrationList()) {
+            if (session.getUsername() != null && session.getUsername().equals(username)) {
+                return session;
+            }
+        }
+        return null;
+    }
+
     public void removeSipRegistration(SipRegistration session) {
         this.getSipRegistrationList().remove(session);
     }

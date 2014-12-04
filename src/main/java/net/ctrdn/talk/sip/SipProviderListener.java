@@ -10,12 +10,15 @@ import javax.sip.ResponseEvent;
 import javax.sip.SipListener;
 import javax.sip.TimeoutEvent;
 import javax.sip.TransactionTerminatedEvent;
+import javax.sip.address.SipURI;
 import javax.sip.header.CallIdHeader;
+import javax.sip.header.FromHeader;
 import javax.sip.header.ViaHeader;
 import javax.sip.message.Request;
 import net.ctrdn.talk.core.ProxyController;
 import net.ctrdn.talk.exception.TalkSipServerException;
 import net.ctrdn.talk.exception.TalkSipRegistrationException;
+import net.ctrdn.talk.exception.TalkSipSessionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -121,8 +124,9 @@ public class SipProviderListener implements SipListener {
 
     private SipRegistration lookupRegistration(Request request, boolean createNew) throws TalkSipRegistrationException {
         SipRegistration registration;
-        ViaHeader viaHeader = (ViaHeader) request.getHeader("Via");
-        registration = this.sipServer.getSipRegistration(viaHeader.getHost(), (viaHeader.getPort() == -1) ? 5060 : viaHeader.getPort());
+        FromHeader fromHeader = (FromHeader) request.getHeader(FromHeader.NAME);
+        ViaHeader viaHeader = (ViaHeader) request.getHeader(ViaHeader.NAME);
+        registration = this.sipServer.getSipRegistration(((SipURI) fromHeader.getAddress().getURI()).getUser());
         if (registration == null && createNew) {
             this.logger.debug("Creating new SIP registration for {}:{}", viaHeader.getHost(), (viaHeader.getPort() == -1) ? 5060 : viaHeader.getPort());
             registration = new SipRegistration(sipServer, viaHeader.getHost(), (viaHeader.getPort() == -1) ? 5060 : viaHeader.getPort());
@@ -147,21 +151,23 @@ public class SipProviderListener implements SipListener {
     }
 
     private void processSessionRequest(RequestEvent requestEvent) {
-        SipRegistration registration = null;
         try {
-            registration = this.lookupRegistration(requestEvent.getRequest(), false);
+            CallIdHeader callIdHeader = (CallIdHeader) requestEvent.getRequest().getHeader(CallIdHeader.NAME);
+            for (SipSession session : SipProviderListener.this.sipServer.getSipSessionList()) {
+                if (session.getCallIdHeader().getCallId().equals(callIdHeader.getCallId())) {
+                    session.sessionRequestReceived(requestEvent);
+                    return;
+                }
+            }
+            FromHeader fromHeader = (FromHeader) requestEvent.getRequest().getHeader(FromHeader.NAME);
+            SipRegistration registration = this.sipServer.getSipRegistration(((SipURI) fromHeader.getAddress().getURI()).getUser());
             if (registration != null) {
                 registration.sessionRequestReceived(requestEvent);
             } else {
-                throw new TalkSipRegistrationException("Failed to lookup originating registration");
+                this.logger.warn("Received session request from unregistered client");
             }
-        } catch (TalkSipRegistrationException ex) {
-            if (registration != null) {
-                this.sipServer.removeSipRegistration(registration);
-            }
-            this.logger.warn("Error processing session request: " + ex.getMessage());
-        } catch (TalkSipServerException ex) {
-            this.logger.warn("Failed to parse incoming header", ex);
+        } catch (TalkSipServerException | TalkSipSessionException ex) {
+            this.logger.warn("Error processing session request", ex);
         }
     }
 

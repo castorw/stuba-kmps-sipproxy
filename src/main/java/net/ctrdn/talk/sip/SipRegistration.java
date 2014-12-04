@@ -15,6 +15,7 @@ import javax.sip.RequestEvent;
 import javax.sip.address.Address;
 import javax.sip.header.CallIdHeader;
 import javax.sip.header.ContactHeader;
+import javax.sip.header.FromHeader;
 import javax.sip.header.ProxyAuthorizationHeader;
 import javax.sip.header.ToHeader;
 import javax.sip.message.Response;
@@ -44,10 +45,11 @@ public class SipRegistration {
     private Date lastRegisterResponseSendDate;
     private SipAccountDao sipAccountDao = null;
     private Integer activeExpireTime = null;
+    private String username;
 
     // helpers
     private final DigestServerAuthenticationHelper authenticationHelper;
-    
+
     public SipRegistration(SipServer sipServer, String remoteHost, int remotePort) throws TalkSipRegistrationException {
         try {
             this.sipServer = sipServer;
@@ -66,7 +68,7 @@ public class SipRegistration {
             throw new TalkSipRegistrationException("Failed to create SIP session", ex);
         }
     }
-    
+
     public void registerReceived(RequestEvent requestEvent) throws TalkSipRegistrationException, TalkSipServerException {
         try {
             if (requestEvent.getRequest().getExpires() != null && requestEvent.getRequest().getExpires().getExpires() == 0) {
@@ -79,6 +81,8 @@ public class SipRegistration {
             }
             switch (this.getState()) {
                 case STARTED: {
+                    FromHeader fromHeader = (FromHeader) requestEvent.getRequest().getHeader(FromHeader.NAME);
+                    this.username = ((SipUri) fromHeader.getAddress().getURI()).getUser();
                     Response challengeResponse = this.getSipServer().getSipMessageFactory().createResponse(Response.PROXY_AUTHENTICATION_REQUIRED, requestEvent.getRequest());
                     this.authenticationHelper.generateChallenge(this.getSipServer().getSipHeaderFactory(), challengeResponse, this.getSipServer().getSipDomain());
                     this.sipServer.sendResponse(requestEvent, challengeResponse);
@@ -114,12 +118,12 @@ public class SipRegistration {
                     }
                     this.sipAccountDao = lookupAccountDao;
                     this.state = SipRegistrationAuthenticationState.AUTHENTICATED;
-                    
+
                     this.registeredContactHeaderList.clear();
                     BasicDBObject extensionSearchCriteria = new BasicDBObject("TargetType", "SipAccount");
                     extensionSearchCriteria.put("SipAccountObjectId", this.getSipAccountDao().getObjectId());
                     extensionSearchCriteria.put("Enabled", true);
-                    
+
                     ContactHeader defaultContactHeader = this.sipServer.getSipHeaderFactory().createContactHeader(this.sipServer.getSipAddressFactory().createAddress(this.sipAccountDao.getSystemUserDao().getDisplayName(), this.sipServer.getSipAddressFactory().createSipURI(this.sipAccountDao.getUsername(), this.sipServer.getSipDomain())));
                     this.registeredContactHeaderList.add(defaultContactHeader);
                     for (SipExtensionDao sed : DatabaseObjectFactory.getInstance().list(SipExtensionDao.class, extensionSearchCriteria)) {
@@ -130,7 +134,7 @@ public class SipRegistration {
                         this.registeredContactHeaderList.add(contactHeader);
                         this.getRegisteredExtensionDaoList().add(sed);
                     }
-                    
+
                     this.sendResponseOk(requestEvent, true);
                     this.getSipAccountDao().setLastLoginDate(new Date());
                     this.getSipAccountDao().store();
@@ -153,7 +157,7 @@ public class SipRegistration {
             throw new TalkSipServerException("Failed processing REGISTER request", ex);
         }
     }
-    
+
     public void sessionRequestReceived(RequestEvent requestEvent) throws TalkSipServerException {
         try {
             if (this.getState() != SipRegistrationAuthenticationState.AUTHENTICATED) {
@@ -205,7 +209,7 @@ public class SipRegistration {
             throw new TalkSipServerException("Failed processing session request", ex);
         }
     }
-    
+
     private void unregister(RequestEvent requestEvent) throws TalkSipServerException {
         try {
             Response okResponse = this.getSipServer().getSipMessageFactory().createResponse(Response.OK, requestEvent.getRequest());
@@ -217,13 +221,13 @@ public class SipRegistration {
             throw new TalkSipServerException("Error unregistering", ex);
         }
     }
-    
+
     public void timedOut() {
         this.logger.info("Registration for {} timed out", this.sipAccountDao.getUsername());
         this.state = SipRegistrationAuthenticationState.UNREGISTERED;
         this.getSipServer().removeSipRegistration(this);
     }
-    
+
     private void sendResponseOk(RequestEvent requestEvent, boolean updateContactList) throws TalkSipServerException {
         try {
             Response okResponse = this.getSipServer().getSipMessageFactory().createResponse(Response.OK, requestEvent.getRequest());
@@ -241,13 +245,13 @@ public class SipRegistration {
             throw new TalkSipServerException("Error responding", ex);
         }
     }
-    
+
     private void sendResponseUnauthorized(RequestEvent requestEvent) throws TalkSipServerException, ParseException {
         Response response = this.sipServer.getSipMessageFactory().createResponse(Response.UNAUTHORIZED, requestEvent.getRequest());
         this.sipServer.sendResponse(requestEvent, response);
-        
+
     }
-    
+
     private String generateDigestResponseMd5(String username, String realm, String plaintextPassword) throws UnsupportedEncodingException, NoSuchAlgorithmException {
         MessageDigest md = MessageDigest.getInstance("MD5");
         byte[] hashBytes = md.digest((username + ":" + realm + ":" + plaintextPassword).getBytes("UTF-8"));
@@ -261,23 +265,23 @@ public class SipRegistration {
         }
         return hexString.toString();
     }
-    
+
     public String getRemoteHost() {
         return remoteHost;
     }
-    
+
     public int getRemotePort() {
         return remotePort;
     }
-    
+
     public SipRegistrationAuthenticationState getState() {
         return state;
     }
-    
+
     public SipServer getSipServer() {
         return sipServer;
     }
-    
+
     public boolean isAvailableAtAddress(Address address) {
         for (ContactHeader ch : this.registeredContactHeaderList) {
             SipUri su = (SipUri) ch.getAddress().getURI();
@@ -288,20 +292,28 @@ public class SipRegistration {
         }
         return false;
     }
-    
+
     public SipAccountDao getSipAccountDao() {
         return sipAccountDao;
     }
-    
+
     public Date getLastRegisterResponseSendDate() {
         return lastRegisterResponseSendDate;
     }
-    
+
     public Integer getActiveExpireTime() {
         return activeExpireTime;
     }
-    
+
     public List<SipExtensionDao> getRegisteredExtensionDaoList() {
         return registeredExtensionDaoList;
+    }
+
+    public String getUsername() {
+        if (this.sipAccountDao == null) {
+            return username;
+        } else {
+            return this.sipAccountDao.getUsername();
+        }
     }
 }
