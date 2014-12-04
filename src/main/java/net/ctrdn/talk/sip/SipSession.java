@@ -352,11 +352,13 @@ public class SipSession {
                             this.lastCancelRequestServerTransaction = this.sipServer.getServerTransaction(requestEvent);
                             this.sipSessionDao.setCancelDate(new Date());
                             this.sendOkToCaller(requestEvent);
-                            Request cancelRequest = this.lastRingingResponseClientTransaction.createCancel();
-                            this.sipServer.attachProxyViaHeader(cancelRequest, this.lastInviteBranch);
-                            this.logger.trace("Forwarding CANCEL request\n{}", cancelRequest.toString());
-                            ClientTransaction ct = this.sipServer.getSipProvider().getNewClientTransaction(cancelRequest);
-                            ct.sendRequest();
+                            if (this.lastRingingResponse != null) {
+                                Request cancelRequest = this.lastRingingResponseClientTransaction.createCancel();
+                                this.sipServer.attachProxyViaHeader(cancelRequest, this.lastInviteBranch);
+                                this.logger.trace("Forwarding CANCEL request\n{}", cancelRequest.toString());
+                                ClientTransaction ct = this.sipServer.getSipProvider().getNewClientTransaction(cancelRequest);
+                                ct.sendRequest();
+                            }
                             this.getSipSessionDao().setEndCause("Canceled by caller");
                             this.state = SipSessionState.ENDED;
                             break;
