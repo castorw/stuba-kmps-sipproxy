@@ -9,6 +9,8 @@
             var dd = data.Response.DashboardData;
             $("#db-sip-registration-count").html(dd.SipRegistrationCount);
             $("#db-sip-call-count").html(dd.SipCallCount);
+            $("#db-webrtc-user-count").html(dd.WebRtcUserCount);
+            $("#db-webrtc-session-count").html(dd.WebRtcSessionCount);
             setTimeout(function() {
                 load_data();
             }, 2500);
@@ -29,12 +31,27 @@
 
         <div class="col-md-3 col-sm-6">
             <div class="fd-tile detail tile-green">
-                <div class="content"><h1 class="text-left" id="db-sip-call-count"></h1><p>Call Sessions Active</p></div>
+                <div class="content"><h1 class="text-left" id="db-sip-call-count"></h1><p>SIP Sessions Active</p></div>
                 <div class="icon"><i class="fa fa-phone"></i></div>
                 <a class="details" href="/sip-calls.html">Details <span><i class="fa fa-arrow-circle-right pull-right"></i></span></a>
             </div>
         </div>
 
+        <div class="col-md-3 col-sm-6">
+            <div class="fd-tile detail tile-orange">
+                <div class="content"><h1 class="text-left" id="db-webrtc-user-count"></h1><p>WebRTC Users Online</p></div>
+                <div class="icon"><i class="fa fa-comment"></i></div>
+                <a class="details" href="#">Details <span><i class="fa fa-arrow-circle-right pull-right"></i></span></a>
+            </div>
+        </div>
+
+        <div class="col-md-3 col-sm-6">
+            <div class="fd-tile detail tile-red">
+                <div class="content"><h1 class="text-left" id="db-webrtc-session-count"></h1><p>WebRTC Sessions Active</p></div>
+                <div class="icon"><i class="fa fa-camera"></i></div>
+                <a class="details" href="#">Details <span><i class="fa fa-arrow-circle-right pull-right"></i></span></a>
+            </div>
+        </div>
     </div>
 </div>
 %portal_footer_html%

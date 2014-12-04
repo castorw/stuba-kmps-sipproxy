@@ -21,6 +21,8 @@ public class DashboardDataMethod extends DefaultApiMethod {
 
         dataJob.add("SipRegistrationCount", this.getProxyController().getSipServer().getSipRegistrationList().size());
         dataJob.add("SipCallCount", this.getProxyController().getSipServer().getSipSessionList().size());
+        dataJob.add("WebRtcUserCount", this.getProxyController().getWebRtcProvider().getPresenceList().size());
+        dataJob.add("WebRtcSessionCount", this.getProxyController().getWebRtcProvider().getSessionList().size());
 
         responseJob.add("DashboardData", dataJob);
         return responseJob;
