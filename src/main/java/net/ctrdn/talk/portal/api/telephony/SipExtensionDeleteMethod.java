@@ -41,4 +41,9 @@ public class SipExtensionDeleteMethod extends DefaultApiMethod {
         }
         return responseJob;
     }
+
+    @Override
+    public boolean isAdminOnly() {
+        return true;
+    }
 }

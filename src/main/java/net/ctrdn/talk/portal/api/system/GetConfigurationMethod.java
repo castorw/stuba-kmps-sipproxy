@@ -54,4 +54,9 @@ public class GetConfigurationMethod extends DefaultApiMethod {
                 break;
         }
     }
+
+    @Override
+    public boolean isAdminOnly() {
+        return true;
+    }
 }

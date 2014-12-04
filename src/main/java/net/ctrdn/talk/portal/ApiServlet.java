@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import javax.json.Json;
-import javax.json.JsonObject;
 import javax.json.JsonObjectBuilder;
 import javax.json.JsonWriter;
 import javax.json.stream.JsonGenerator;
@@ -41,13 +40,13 @@ public class ApiServlet extends HttpServlet {
         response.setContentType("text/json");
         String apiCallName = request.getRequestURI().replace(request.getServletPath() + "/", "");
         JsonObjectBuilder responseJob = Json.createObjectBuilder();
-
+        SystemUserSessionDao sessionDao = null;
         try {
             if (!apiCallName.equals("system.user.login")) {
                 if (session.getAttribute("UserSession") == null) {
                     throw new PortalAuthenticationException("Not logged in");
                 }
-                SystemUserSessionDao sessionDao = (SystemUserSessionDao) session.getAttribute("UserSession");
+                sessionDao = (SystemUserSessionDao) session.getAttribute("UserSession");
                 this.proxyController.checkPortalSession(sessionDao);
             }
 
@@ -55,6 +54,9 @@ public class ApiServlet extends HttpServlet {
                 ApiMethod method = ApiMethodRegistry.getInstance().getMethod(apiCallName);
                 if (method != null) {
                     try {
+                        if (method.isAdminOnly() && (sessionDao == null || !sessionDao.getUser().isAdministratorAccess())) {
+                            throw new ApiMethodException("Insifficient privileges");
+                        }
                         JsonObjectBuilder methodJob = method.execute(this.proxyController, request, response);
                         responseJob.add("Response", methodJob);
                         responseJob.add("Status", true);

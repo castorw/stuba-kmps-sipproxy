@@ -13,11 +13,11 @@ import net.ctrdn.talk.portal.api.DefaultApiMethod;
 import net.ctrdn.talk.sip.SipSession;
 
 public class CallTerminateMethod extends DefaultApiMethod {
-    
+
     public CallTerminateMethod(ProxyController proxyController) {
         super(proxyController, "telephony.call.terminate");
     }
-    
+
     @Override
     public JsonObjectBuilder execute(ProxyController proxyController, HttpServletRequest request, HttpServletResponse response) throws ApiMethodException {
         UUID internalUuid = UUID.fromString(request.getParameter("uuid"));
@@ -40,5 +40,10 @@ public class CallTerminateMethod extends DefaultApiMethod {
             this.getLogger().warn("Failed to terminate session", ex);
             throw new ApiMethodUserException("Failed to terminate session");
         }
+    }
+
+    @Override
+    public boolean isAdminOnly() {
+        return true;
     }
 }

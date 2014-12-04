@@ -70,4 +70,9 @@ public class SipExtensionCreateMethod extends DefaultApiMethod {
         responseJob.add("ObjectId", sipExtensionDao.getObjectId().toHexString());
         return responseJob;
     }
+
+    @Override
+    public boolean isAdminOnly() {
+        return true;
+    }
 }

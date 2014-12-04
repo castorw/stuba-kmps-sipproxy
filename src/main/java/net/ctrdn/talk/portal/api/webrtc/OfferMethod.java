@@ -77,4 +77,8 @@ public class OfferMethod extends DefaultApiMethod {
         return responseJob;
     }
 
+    @Override
+    public boolean isAdminOnly() {
+        return false;
+    }
 }

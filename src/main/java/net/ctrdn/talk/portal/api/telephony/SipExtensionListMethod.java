@@ -57,4 +57,9 @@ public class SipExtensionListMethod extends DefaultApiMethod {
         responseJob.add("SipExtensionList", extensionListJab);
         return responseJob;
     }
+
+    @Override
+    public boolean isAdminOnly() {
+        return true;
+    }
 }

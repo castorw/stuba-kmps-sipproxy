@@ -16,11 +16,11 @@ import net.ctrdn.talk.dao.SystemUserDao;
 import org.bson.types.ObjectId;
 
 public class SipAccountCreateMethod extends DefaultApiMethod {
-    
+
     public SipAccountCreateMethod(ProxyController proxyController) {
         super(proxyController, "telephony.sip-account.create");
     }
-    
+
     @Override
     public JsonObjectBuilder execute(ProxyController proxyController, HttpServletRequest request, HttpServletResponse response) throws ApiMethodException {
         String inUsername = request.getParameter("username");
@@ -29,7 +29,7 @@ public class SipAccountCreateMethod extends DefaultApiMethod {
         boolean inEnabled = this.processInputBoolean(request.getParameter("enabled"));
         boolean inRecordIncomingCalls = this.processInputBoolean(request.getParameter("record-incoming-calls"));
         boolean inRecordOutgoingCalls = this.processInputBoolean(request.getParameter("record-outgoing-calls"));
-        
+
         if (inSystemAccountObjectId.trim().isEmpty()) {
             throw new ApiMethodUserException("System account needs to be selected.");
         }
@@ -47,7 +47,7 @@ public class SipAccountCreateMethod extends DefaultApiMethod {
         if (sipAccountDao != null) {
             throw new ApiMethodUserException("SIP Account with this username already exists.");
         }
-        
+
         sipAccountDao = DatabaseObjectFactory.getInstance().create(SipAccountDao.class);
         sipAccountDao.setSystemUserDao(systemAccountDao);
         sipAccountDao.setUsername(inUsername);
@@ -58,9 +58,14 @@ public class SipAccountCreateMethod extends DefaultApiMethod {
         sipAccountDao.setRecordOutgoingCalls(inRecordOutgoingCalls);
         sipAccountDao.setEnabled(inEnabled);
         sipAccountDao.store();
-        
+
         JsonObjectBuilder job = Json.createObjectBuilder();
         job.add("ObjectId", sipAccountDao.getObjectId().toHexString());
         return job;
+    }
+
+    @Override
+    public boolean isAdminOnly() {
+        return true;
     }
 }

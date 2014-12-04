@@ -11,4 +11,6 @@ public interface ApiMethod {
     public String getPath();
 
     public JsonObjectBuilder execute(ProxyController proxyController, HttpServletRequest request, HttpServletResponse response) throws ApiMethodException;
+
+    public boolean isAdminOnly();
 }

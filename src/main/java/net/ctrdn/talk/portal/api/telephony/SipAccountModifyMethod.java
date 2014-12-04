@@ -45,4 +45,9 @@ public class SipAccountModifyMethod extends DefaultApiMethod {
         job.add("ObjectId", sipAccountDao.getObjectId().toHexString());
         return job;
     }
+
+    @Override
+    public boolean isAdminOnly() {
+        return true;
+    }
 }

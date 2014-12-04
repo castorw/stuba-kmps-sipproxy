@@ -37,7 +37,7 @@ public class SipAccountListMethod extends DefaultApiMethod {
             accountJob.add("Enabled", accountDao.getEnabled());
             boolean online = false;
             for (SipRegistration reg : this.getProxyController().getSipServer().getSipRegistrationList()) {
-                if (reg.getSipAccountDao().getObjectId().equals(accountDao.getObjectId())) {
+                if (reg.getSipAccountDao() != null && reg.getSipAccountDao().getObjectId().equals(accountDao.getObjectId())) {
                     online = true;
                     break;
                 }
@@ -50,5 +50,10 @@ public class SipAccountListMethod extends DefaultApiMethod {
         JsonObjectBuilder responseJob = Json.createObjectBuilder();
         responseJob.add("SipAccountList", accountListJab);
         return responseJob;
+    }
+
+    @Override
+    public boolean isAdminOnly() {
+        return true;
     }
 }

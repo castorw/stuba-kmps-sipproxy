@@ -31,4 +31,9 @@ public class UserLogoutMethod extends DefaultApiMethod {
         this.getLogger().info("{} User " + sesionDao.getUser().getUsername() + " logged out", this.getLogId(request));
         return responseJob;
     }
+
+    @Override
+    public boolean isAdminOnly() {
+        return false;
+    }
 }

@@ -25,4 +25,10 @@ public class DashboardDataMethod extends DefaultApiMethod {
         responseJob.add("DashboardData", dataJob);
         return responseJob;
     }
+
+    @Override
+    public boolean isAdminOnly() {
+        return false;
+    }
+
 }

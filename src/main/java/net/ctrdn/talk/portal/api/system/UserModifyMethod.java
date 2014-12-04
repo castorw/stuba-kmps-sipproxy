@@ -61,4 +61,9 @@ public class UserModifyMethod extends DefaultApiMethod {
         }
         throw new ApiMethodUserException("User not found..");
     }
+
+    @Override
+    public boolean isAdminOnly() {
+        return true;
+    }
 }

@@ -153,4 +153,9 @@ public class CallListMethod extends DefaultApiMethod {
             method.invoke(job, name, data);
         }
     }
+
+    @Override
+    public boolean isAdminOnly() {
+        return true;
+    }
 }

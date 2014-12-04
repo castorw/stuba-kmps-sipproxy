@@ -33,4 +33,9 @@ public class SetConfigurationMethod extends DefaultApiMethod {
         responseJob.add("Successful", true);
         return responseJob;
     }
+
+    @Override
+    public boolean isAdminOnly() {
+        return true;
+    }
 }

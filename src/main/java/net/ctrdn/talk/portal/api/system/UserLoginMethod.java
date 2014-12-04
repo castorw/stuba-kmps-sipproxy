@@ -94,4 +94,9 @@ public class UserLoginMethod extends DefaultApiMethod {
             throw new ApiMethodException("Failed to authenticate user", ex);
         }
     }
+
+    @Override
+    public boolean isAdminOnly() {
+        return false;
+    }
 }

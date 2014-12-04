@@ -9,17 +9,23 @@ public class MenuItem {
     private final String icon;
     private final String url;
     private final boolean targetBlank;
+    private final boolean adminOnly;
     private final List<MenuItem> subItemList = new ArrayList<>();
 
-    public MenuItem(String title, String url, String icon, boolean targetBlank) {
+    public MenuItem(String title, String url, String icon, boolean adminOnly, boolean targetBlank) {
         this.title = title;
         this.url = url;
         this.icon = icon;
         this.targetBlank = targetBlank;
+        this.adminOnly = adminOnly;
+    }
+
+    public MenuItem(String title, String url, String icon, boolean adminOnly) {
+        this(title, url, icon, adminOnly, false);
     }
 
     public MenuItem(String title, String url, String icon) {
-        this(title, url, icon, false);
+        this(title, url, icon, false, false);
     }
 
     public MenuItem(String title, String url) {
@@ -42,7 +48,10 @@ public class MenuItem {
         return url;
     }
 
-    public String toHtmlString(String currentUrl) {
+    public String toHtmlString(boolean isAdmin, String currentUrl) {
+        if (this.adminOnly && !isAdmin) {
+            return "";
+        }
         String activeHtml = (currentUrl.equals(this.getUrl())) ? "active" : "";
         String html = "";
         if (this.subItemList.size() > 0) {
@@ -54,7 +63,7 @@ public class MenuItem {
             html += "<span>" + this.getTitle() + "</span></a>";
             html += "<ul class=\"sub-menu\">";
             for (MenuItem mi : this.subItemList) {
-                html += mi.toSubmenuHtmlString(currentUrl);
+                html += mi.toSubmenuHtmlString(isAdmin, currentUrl);
             }
             html += "</ul></a>";
         } else {
@@ -69,7 +78,10 @@ public class MenuItem {
         return html;
     }
 
-    private String toSubmenuHtmlString(String currentUrl) {
+    private String toSubmenuHtmlString(boolean isAdmin, String currentUrl) {
+        if (this.adminOnly && !isAdmin) {
+            return "";
+        }
         String activeHtml = (currentUrl.equals(this.getUrl())) ? " class=\"active\"" : "";
         String html = "<li" + activeHtml + ">";
         html += "<a href=\"" + this.getUrl() + "\"" + ((this.targetBlank) ? "target=\"_blank\"" : "") + ">" + this.getTitle() + "</a>";

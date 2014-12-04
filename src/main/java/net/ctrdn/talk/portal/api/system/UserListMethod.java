@@ -40,4 +40,8 @@ public class UserListMethod extends DefaultApiMethod {
         return responseJob;
     }
 
+    @Override
+    public boolean isAdminOnly() {
+        return true;
+    }
 }

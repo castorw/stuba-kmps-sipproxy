@@ -61,4 +61,9 @@ public class UserCreateMethod extends DefaultApiMethod {
             throw new ApiMethodException("Internal Error - Unable to digest password.", ex);
         }
     }
+
+    @Override
+    public boolean isAdminOnly() {
+        return true;
+    }
 }

@@ -73,4 +73,8 @@ public class EstablishedMethod extends DefaultApiMethod {
         return responseJob;
     }
 
+    @Override
+    public boolean isAdminOnly() {
+        return false;
+    }
 }
