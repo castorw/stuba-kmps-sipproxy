@@ -130,6 +130,9 @@ public class ResourceServlet extends HttpServlet {
         systemMenuItem.addSubItem(new MenuItem("User Accounts", "/system-accounts.html", null, true));
         menuItemList.add(systemMenuItem);
 
+        // About Menu Item
+        menuItemList.add(new MenuItem("About", "/about.html", "fa-info-circle", false));
+
         // Logout Menu Item
         menuItemList.add(new MenuItem("Logout", "#logout", "fa-sign-out"));
         String mainMenuHtml = "";
