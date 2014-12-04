@@ -1,12 +1,29 @@
 var webrtcConstraints = {
-    video: {
-        mandatory: {
-            minWidth: 1280,
-            minHeight: 720
-        }
-    },
-    audio: true
+    "audio": true,
+    "video": {
+        "mandatory": {
+            "minWidth": "640",
+            "minHeight": "480",
+            "maxWidth": "1280",
+            "maxHeight": "720"
+        },
+        "optional": [
+            {
+                "minWidth": "1280"
+            },
+            {
+                "minHeight": "720"
+            },
+            {
+                "maxWidth": "1920"
+            },
+            {
+                "maxHeight": "1080"
+            }
+        ]
+    }
 };
+
 var ringtone_playing = false;
 var present_user_cache = null;
 var current_session = null;
@@ -52,8 +69,9 @@ function initialize_gui() {
         var userObjectId = $(this).attr("data-call-object-id");
         if (current_session === null) {
             webrtc_invite(userObjectId);
-        } else if (current_session.SessionInfo.CallerObjectId === userObjectId) {
+        } else if (current_session.SessionInfo.CallerObjectId === userObjectId && current_session.SessionInfo.State === "OFFER_DELIVERED") {
             webrtc_answer();
+        } else if (current_session.SessionInfo.CallerObjectId === userObjectId) {
         } else {
             alert("You cannot open a new session until there is an ongoing session.");
         }
@@ -71,6 +89,15 @@ function initialize_gui() {
         } else {
             alert("No call to terminate");
         }
+    });
+    $("#logout-button").click(function() {
+        call_talk_api("system.user.logout", function(data) {
+            if (data.Response.Successful === true) {
+                location.href = data.Response.TargetUri;
+            } else {
+                alert("Something crappy happened. The logout api method responded with unknown failure. Please try again later... or whatever...");
+            }
+        });
     });
 }
 
@@ -261,6 +288,7 @@ function webrtc_create_peer_connection() {
             local_ice_candidate = [];
         }
         if (event.candidate !== null) {
+            console.log(event.candidate);
             local_ice_candidate.push(event.candidate);
         }
     };
