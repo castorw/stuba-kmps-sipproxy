@@ -125,7 +125,7 @@ public class AlgChannel {
 
     public void start() throws RtpAlgException {
         try {
-            int testPort = 1025 + new Random().nextInt((65534 - 1024));
+            int testPort = 55000 + new Random().nextInt((56999 - 55000));
             boolean gotCombo = false;
             while (!gotCombo) {
                 try {

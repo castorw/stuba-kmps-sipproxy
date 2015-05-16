@@ -32,6 +32,7 @@ import javax.sip.header.ViaHeader;
 import javax.sip.message.Request;
 import javax.sip.message.Response;
 import net.ctrdn.talk.core.common.DatabaseObjectFactory;
+import net.ctrdn.talk.dao.SipAccountDao;
 import net.ctrdn.talk.dao.SipExtensionDao;
 import net.ctrdn.talk.dao.SipSessionDao;
 import net.ctrdn.talk.exception.RtpAlgException;
@@ -48,8 +49,8 @@ public class SipSession {
     private final UUID internalUuid = UUID.randomUUID();
     private final Logger logger = LoggerFactory.getLogger(SipSession.class);
     private final SipSessionDao sipSessionDao;
-    private final SipRegistration callerRegistration;
-    private final SipRegistration calleeRegistration;
+    private final SipAccountDao callerSipAccountDao;
+    private final SipAccountDao calleeSipAccountDao;
     private final SipExtensionDao callerExtensionDao;
     private final SipExtensionDao calleeExtensionDao;
     private final SipServer sipServer;
@@ -67,21 +68,26 @@ public class SipSession {
     private Response lastRingingResponse;
     private ClientTransaction lastRingingResponseClientTransaction;
     private AlgChannel algChannel = null;
+    private String callerHost;
+    private int callerPort;
+    private String calleeHost;
+    private int calleePort;
 
     private SipSessionState state = SipSessionState.STARTED;
 
-    public SipSession(SipRegistration callerRegistration, SipRegistration calleeRegistration, SipExtensionDao calleeExtension) throws TalkSipServerException {
-        this.callerRegistration = callerRegistration;
-        this.calleeRegistration = calleeRegistration;
-        this.callerExtensionDao = this.callerRegistration.getSipAccountDao().getPrimaryExtension();
+    public SipSession(SipServer sipServer, SipAccountDao callerSipAccountDao, String callerHost, int callerPort, SipAccountDao calleeSipAccountDao, String calleeHost, int calleePort, SipExtensionDao calleeExtension) throws TalkSipServerException {
+        this.callerSipAccountDao = callerSipAccountDao;
+        this.calleeSipAccountDao = calleeSipAccountDao;
+        this.callerHost = callerHost;
+        this.callerPort = callerPort;
+        this.calleeHost = calleeHost;
+        this.calleePort = calleePort;
+        this.callerExtensionDao = this.callerSipAccountDao.getPrimaryExtension();
         this.calleeExtensionDao = calleeExtension;
-        if (this.calleeRegistration.getSipServer() != this.callerRegistration.getSipServer()) {
-            throw new TalkSipServerException("Having single session between multiple SIP servers is not supported yet");
-        }
-        this.sipServer = this.callerRegistration.getSipServer();
+        this.sipServer = sipServer;
         this.sipSessionDao = DatabaseObjectFactory.getInstance().create(SipSessionDao.class);
-        this.sipSessionDao.setCallerSipAccountDao(this.callerRegistration.getSipAccountDao());
-        this.sipSessionDao.setCalleeSipAccountDao(this.calleeRegistration.getSipAccountDao());
+        this.sipSessionDao.setCallerSipAccountDao(this.callerSipAccountDao);
+        this.sipSessionDao.setCalleeSipAccountDao(this.calleeSipAccountDao);
         this.sipSessionDao.setCallerExtensionDao(this.callerExtensionDao);
         this.sipSessionDao.setCalleeExtensionDao(this.calleeExtensionDao);
         this.sipSessionDao.setAckDate(null);
@@ -101,7 +107,7 @@ public class SipSession {
         this.sipSessionDao.setRtpAlgChannelUuid(null);
         this.sipSessionDao.setRtpAlgEnabled(false);
         this.sipSessionDao.setRtpAlgRecordingEnabled(false);
-        this.logger.info("Opened new SIP session from {}@{} to {}@{}", callerRegistration.getSipAccountDao().getUsername(), this.sipServer.getSipDomain(), calleeRegistration.getSipAccountDao().getUsername(), this.sipServer.getSipDomain());
+        this.logger.info("Opened new SIP session from {}@{} to {}@{}", callerSipAccountDao.getUsername(), this.sipServer.getSipDomain(), calleeSipAccountDao.getUsername(), this.sipServer.getSipDomain());
     }
 
     public void terminate() throws TalkSipSessionException {
@@ -125,8 +131,8 @@ public class SipSession {
                 this.sipServer.attachProxyViaHeader(callerByeRequest, this.sipServer.generateBranch());
                 callerByeRequest.setMethod(Request.BYE);
                 SipUri callerByeRequestUri = (SipUri) callerByeRequest.getRequestURI();
-                callerByeRequestUri.setHost(this.callerRegistration.getRemoteHost());
-                callerByeRequestUri.setPort(this.callerRegistration.getRemotePort());
+                callerByeRequestUri.setHost(this.getCallerHost());
+                callerByeRequestUri.setPort(this.getCallerPort());
                 CSeqHeader callerByeCseqHeader = (CSeqHeader) callerByeRequest.getHeader(CSeqHeader.NAME);
                 callerByeCseqHeader.setSeqNumber(callerByeCseqHeader.getSeqNumber() + 1);
                 callerByeCseqHeader.setMethod(Request.BYE);
@@ -146,8 +152,8 @@ public class SipSession {
                 //CSeqHeader calleeByeCseqHeader = (CSeqHeader) calleeByeRequest.getHeader(CSeqHeader.NAME);
                 //calleeByeCseqHeader.setSeqNumber(calleeByeCseqHeader.getSeqNumber());
                 SipUri calleeByeRequestUri = (SipUri) calleeByeRequest.getRequestURI();
-                calleeByeRequestUri.setHost(this.calleeRegistration.getRemoteHost());
-                calleeByeRequestUri.setPort(this.calleeRegistration.getRemotePort());
+                calleeByeRequestUri.setHost(this.getCalleeHost());
+                calleeByeRequestUri.setPort(this.getCalleePort());
                 ClientTransaction calleeByeCt = this.sipServer.getSipProvider().getNewClientTransaction(calleeByeRequest);
                 this.logger.trace("Sending administrative termination BYE request to callee\n{}", calleeByeRequest.toString());
                 this.lastAckRequestEvent.getDialog().sendRequest(calleeByeCt);
@@ -163,7 +169,7 @@ public class SipSession {
     private void processInviteRequestSdp(Request request) throws TalkSipSessionException {
         try {
             if (this.sipServer.getRtpAlgProvider() != null) {
-                this.algChannel = this.sipServer.getRtpAlgProvider().newChannel(this.getCallerRegistration().getSipAccountDao().getRecordOutgoingCalls() || this.getCalleeRegistration().getSipAccountDao().getRecordIncomingCalls());
+                this.algChannel = this.sipServer.getRtpAlgProvider().newChannel(this.getCallerSipAccountDao().getRecordOutgoingCalls() || this.getCalleeSipAccountDao().getRecordIncomingCalls());
                 this.algChannel.start();
                 this.getSipSessionDao().setRtpAlgEnabled(true);
                 this.getSipSessionDao().setRtpAlgRecordingEnabled(this.algChannel.isRecordingEnabled());
@@ -332,15 +338,15 @@ public class SipSession {
 
                     Request newRequest = (Request) requestEvent.getRequest().clone();
                     try {
-                        this.sipServer.rewriteFromHeader(newRequest, this.callerRegistration);
-                        this.sipServer.rewriteContactHeader(newRequest, this.callerRegistration);
+                        this.sipServer.rewriteFromHeader(newRequest, this.callerSipAccountDao);
+                        this.sipServer.rewriteContactHeader(newRequest, this.callerSipAccountDao);
                         this.sipServer.rewriteUserAgentHeader(newRequest);
                         this.processInviteRequestSdp(newRequest);
                     } catch (TalkSipHeaderRewriteException ex) {
 
                     }
                     this.lastInviteBranch = this.sipServer.generateBranch();
-                    this.sipServer.forwardRequest(this.callerRegistration, this.calleeRegistration, newRequest, this.lastInviteBranch);
+                    this.sipServer.forwardRequest(this.callerSipAccountDao, this.calleeSipAccountDao, this.getCalleeHost(), this.getCalleePort(), newRequest, this.lastInviteBranch);
                     this.sendTryingToCaller(requestEvent);
                     this.state = SipSessionState.INVITED;
                     break;
@@ -370,15 +376,15 @@ public class SipSession {
                         case Request.ACK: {
                             this.getSipSessionDao().setAckDate(new Date());
                             this.lastAckRequestEvent = requestEvent;
-                            this.sipServer.forwardAck(this.lastOkResponse, this.lastOkClientTransaction);
+                            this.sipServer.forwardAck(this.lastOkResponse, this.lastOkClientTransaction, this.calleeHost, this.calleePort);
                             break;
                         }
                         case Request.BYE: {
                             this.getSipSessionDao().setByeDate(new Date());
                             ViaHeader viaHeader = (ViaHeader) requestEvent.getRequest().getHeader(ViaHeader.NAME);
                             boolean byeByCaller = false;
-                            if ((viaHeader.getHost().equals(this.callerRegistration.getRemoteHost()) && viaHeader.getPort() == this.callerRegistration.getRemotePort())
-                                    || (viaHeader.getReceived() != null && viaHeader.getReceived().equals(this.callerRegistration.getRemoteHost()) && viaHeader.getRPort() == this.callerRegistration.getRemotePort())) {
+                            if ((viaHeader.getHost().equals(this.getCallerHost()) && viaHeader.getPort() == this.getCallerPort())
+                                    || (viaHeader.getReceived() != null && viaHeader.getReceived().equals(this.getCallerHost()) && viaHeader.getRPort() == this.getCallerPort())) {
                                 byeByCaller = true;
                             }
                             Request newRequest = (Request) requestEvent.getRequest().clone();
@@ -387,22 +393,22 @@ public class SipSession {
                             this.sipServer.attachProxyViaHeader(newRequest, this.lastByeBranch);
                             if (byeByCaller) {
                                 this.sendOkToCaller(requestEvent);
-                                this.sipServer.rewriteFromHeader(newRequest, this.callerRegistration);
-                                this.sipServer.rewriteContactHeader(newRequest, this.callerRegistration);
+                                this.sipServer.rewriteFromHeader(newRequest, this.callerSipAccountDao);
+                                this.sipServer.rewriteContactHeader(newRequest, this.callerSipAccountDao);
                                 SipUri requestUri = (SipUri) newRequest.getRequestURI();
-                                requestUri.setHost(this.calleeRegistration.getRemoteHost());
-                                requestUri.setPort(this.calleeRegistration.getRemotePort());
+                                requestUri.setHost(this.getCalleeHost());
+                                requestUri.setPort(this.getCalleePort());
                                 this.logger.trace("Forwarding BYE to callee\n{}", newRequest.toString());
                                 ClientTransaction ct = this.sipServer.getSipProvider().getNewClientTransaction(newRequest);
                                 this.lastOkClientTransaction.getDialog().sendRequest(ct);
                                 this.getSipSessionDao().setEndCause("Graceful bye by caller");
                             } else {
                                 this.sendOkToCallee(requestEvent);
-                                this.sipServer.rewriteFromHeader(newRequest, this.calleeRegistration);
-                                this.sipServer.rewriteContactHeader(newRequest, this.calleeRegistration);
+                                this.sipServer.rewriteFromHeader(newRequest, this.calleeSipAccountDao);
+                                this.sipServer.rewriteContactHeader(newRequest, this.calleeSipAccountDao);
                                 SipUri requestUri = (SipUri) newRequest.getRequestURI();
-                                requestUri.setHost(this.callerRegistration.getRemoteHost());
-                                requestUri.setPort(this.callerRegistration.getRemotePort());
+                                requestUri.setHost(this.getCallerHost());
+                                requestUri.setPort(this.getCallerPort());
                                 this.logger.trace("Forwarding BYE to caller\n{}", newRequest.toString());
                                 ClientTransaction ct = this.sipServer.getSipProvider().getNewClientTransaction(newRequest);
                                 this.lastAckRequestEvent.getDialog().sendRequest(ct);
@@ -438,7 +444,7 @@ public class SipSession {
                             this.getSipSessionDao().setRingingResponseDate(new Date());
                             this.logger.debug("Forwarding RINGING response to caller");
                             newResponse = this.sipServer.getSipMessageFactory().createResponse(Response.RINGING, this.lastInviteRequestEvent.getRequest());
-                            this.sipServer.rewriteContactHeader(newResponse, this.calleeRegistration);
+                            this.sipServer.rewriteContactHeader(newResponse, this.calleeSipAccountDao);
                             this.sipServer.attachTargetViaHeader(newResponse, this.lastInviteRequestEvent.getRequest());
                             this.sipServer.attachUserAgentAndServerHeader(newResponse);
                             this.sipServer.sendResponse(this.lastInviteRequestServerTransaction, newResponse);
@@ -447,7 +453,7 @@ public class SipSession {
                         } else if (responseEvent.getResponse().getStatusCode() == 200) {
                             this.getSipSessionDao().setOkResponseDate(new Date());
                             this.logger.debug("Session answered by callee, forwarding OK to caller");
-                            this.sipServer.rewriteContactHeader(newResponse, this.calleeRegistration);
+                            this.sipServer.rewriteContactHeader(newResponse, this.calleeSipAccountDao);
                             this.sipServer.attachTargetViaHeader(newResponse, this.lastInviteRequestEvent.getRequest());
                             this.sipServer.attachUserAgentAndServerHeader(newResponse);
                             this.processOkResponseSdp(newResponse);
@@ -481,7 +487,7 @@ public class SipSession {
 
     private void sendOkToCaller(RequestEvent requestEvent) throws ParseException, TalkSipServerException {
         try {
-            Response response = this.callerRegistration.getSipServer().getSipMessageFactory().createResponse(Response.OK, requestEvent.getRequest());
+            Response response = this.sipServer.getSipMessageFactory().createResponse(Response.OK, requestEvent.getRequest());
             this.sipServer.sendResponse(requestEvent, response);
         } catch (ParseException ex) {
             throw new TalkSipServerException("Error responding", ex);
@@ -490,7 +496,7 @@ public class SipSession {
 
     private void sendOkToCallee(RequestEvent requestEvent) throws ParseException, TalkSipServerException {
         try {
-            Response response = this.calleeRegistration.getSipServer().getSipMessageFactory().createResponse(Response.OK, requestEvent.getRequest());
+            Response response = this.sipServer.getSipMessageFactory().createResponse(Response.OK, requestEvent.getRequest());
             this.sipServer.sendResponse(requestEvent, response);
         } catch (ParseException ex) {
             throw new TalkSipServerException("Error responding", ex);
@@ -499,7 +505,7 @@ public class SipSession {
 
     private void sendTryingToCaller(RequestEvent requestEvent) throws ParseException, TalkSipServerException {
         try {
-            Response response = this.callerRegistration.getSipServer().getSipMessageFactory().createResponse(Response.TRYING, requestEvent.getRequest());
+            Response response = this.sipServer.getSipMessageFactory().createResponse(Response.TRYING, requestEvent.getRequest());
             this.sipServer.sendResponse(this.lastInviteRequestServerTransaction, response);
         } catch (ParseException ex) {
             throw new TalkSipServerException("Error responding", ex);
@@ -519,12 +525,12 @@ public class SipSession {
         }
     }
 
-    public SipRegistration getCallerRegistration() {
-        return callerRegistration;
+    public SipAccountDao getCallerSipAccountDao() {
+        return callerSipAccountDao;
     }
 
-    public SipRegistration getCalleeRegistration() {
-        return calleeRegistration;
+    public SipAccountDao getCalleeSipAccountDao() {
+        return calleeSipAccountDao;
     }
 
     public CallIdHeader getCallIdHeader() {
@@ -549,5 +555,21 @@ public class SipSession {
 
     public SipExtensionDao getCalleeExtensionDao() {
         return calleeExtensionDao;
+    }
+
+    public String getCallerHost() {
+        return callerHost;
+    }
+
+    public int getCallerPort() {
+        return callerPort;
+    }
+
+    public String getCalleeHost() {
+        return calleeHost;
+    }
+
+    public int getCalleePort() {
+        return calleePort;
     }
 }
